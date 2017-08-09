@@ -7,36 +7,32 @@
 
 #include <utility/Callback.h>
 
-
-
-class UserClass {
-public:
-	void testFkn(int i);
+class UserClass
+{
+  public:
+    void testFkn(int i);
 };
 
-
-void testFkn(UserClass* uc, int val)
+void
+testFkn(UserClass* uc, int val)
 {
-
 }
 
-void testFkn2()
+void
+testFkn2()
 {
 
-	UserClass uc;
+    UserClass uc;
 
-	Callback st;
-	st = Callback::makeMemberCB<decltype(uc), &UserClass::testFkn>(uc);
+    Callback st;
+    st = Callback::makeMemberCB<decltype(uc), &UserClass::testFkn>(uc);
 
+    st = MAKE_MEMBER_CB(UserClass::testFkn, uc);
 
-	st = MAKE_MEMBER_CB(UserClass::testFkn, uc);
+    st(0);
 
+    st = Callback::makeFreeCB<UserClass*, testFkn>(&uc);
 
-	st(0);
-
-	st = Callback::makeFreeCB<UserClass*, testFkn>(&uc);
-
-	st = MAKE_FREE_CB(testFkn, &uc);
-	st(1);
+    st = MAKE_FREE_CB(testFkn, &uc);
+    st(1);
 }
-
