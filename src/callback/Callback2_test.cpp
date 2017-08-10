@@ -37,7 +37,7 @@ void
 testFreeFunction()
 {
     // Create simple callback to a normal free function.
-    auto cb = Callback2<int(int, int)>::makeSimpleFreeCB<testAdd>();
+    auto cb = Callback2<int(int, int)>::makeFreeCB<testAdd>();
 
     // Try making a call. Check result.
     int res = cb(2, 3);
@@ -49,7 +49,7 @@ testFreeFunction()
     assert(res2 == 7);
 
     // Test assign.
-    cb = Callback2<int(int, int)>::makeSimpleFreeCB<testDiff>();
+    cb = Callback2<int(int, int)>::makeFreeCB<testDiff>();
     res = cb(5, 2);
     assert(res == 3);
 }
@@ -76,7 +76,7 @@ testFreeFunctionWithPtr()
     TestObj o;
 
     // Create simple callback to a normal free function.
-    auto cb = Callback2<int(int)>::makeFreeCB<TestObj*, adder>(&o);
+    auto cb = Callback2<int(int)>::makeFreeCBWithPtr<TestObj*, adder>(&o);
 
     o.m_val = 6;
     int res = cb(3);
@@ -101,6 +101,17 @@ testMemberFunction()
 
     o.m_val = 3;
     res = cb(9);
+    assert(res == 12);
+
+    // Try MACRO construction.
+    auto cb2 = MAKE_MEMBER_CB2(int(int), TestObj::add, o);
+
+    o.m_val = 6;
+    res = cb2(3);
+    assert(res == 9);
+
+    o.m_val = 3;
+    res = cb2(9);
     assert(res == 12);
 }
 

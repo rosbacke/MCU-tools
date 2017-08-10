@@ -62,7 +62,7 @@ class Callback2<R(Args...)>
     // Adaptor function for the case where void* is not forwarded
     // to the caller.
     template <R(freeFkn)(Args...)>
-    inline static R doSimpleFreeCB(void* v, Args... args)
+    inline static R doFreeCB(void* v, Args... args)
     {
         return freeFkn(args...);
     }
@@ -77,30 +77,22 @@ class Callback2<R(Args...)>
 
     // Adapter function for the free function with extra first arg
     // in the called function, set at callback construction.
-    template <class Tptr, R(freeFkn)(Tptr, Args...)>
-    inline static R doFreeCB(void* o, Args... args)
+    template <class Tptr, R(freeFknWithPtr)(Tptr, Args...)>
+    inline static R doFreeCBWithPtr(void* o, Args... args)
     {
         Tptr obj = static_cast<Tptr>(o);
-        return freeFkn(obj, args...);
+        return freeFknWithPtr(obj, args...);
     }
 
     // Type of the function pointer for the trampoline functions.
     using CB = R (*)(void*, Args...);
+
+    // Signature presented to the user when calling the callback.
     using TargetFreeCB = R (*)(Args...);
 
   public:
     // Default construct with stored ptr == nullptr.
     Callback2() : m_cb(nullptr), m_ptr(nullptr){};
-
-    // Create ordinary free function pointer callback.
-    Callback2(TargetFreeCB cb) : m_ptr(nullptr)
-    {
-        auto myCB = doSimpleFreeCB<TargetFreeCB>;
-        m_cb = myCB;
-
-        //        template<class Tptr, R (freeFkn)(Tptr, Args...)>
-        // inline static R doSimpleFreeCB(void*v, Args... args)
-    }
 
     ~Callback2(){};
 
@@ -134,9 +126,9 @@ class Callback2<R(Args...)>
      * the pointer.
      */
     template <R (*fkn)(Args... args)>
-    static Callback2 makeSimpleFreeCB()
+    static Callback2 makeFreeCB()
     {
-        auto cb = &doSimpleFreeCB<fkn>;
+        auto cb = &doFreeCB<fkn>;
         return Callback2(cb, nullptr);
     }
 
@@ -156,9 +148,9 @@ class Callback2<R(Args...)>
      * the pointer.
      */
     template <class Tptr, R (*fkn)(Tptr, Args... args)>
-    static Callback2 makeFreeCB(Tptr ptr)
+    static Callback2 makeFreeCBWithPtr(Tptr ptr)
     {
-        auto cb = &doFreeCB<Tptr, fkn>;
+        auto cb = &doFreeCBWithPtr<Tptr, fkn>;
         return Callback2(cb, static_cast<void*>(ptr));
     }
 

@@ -8,11 +8,16 @@
 #ifndef UTILITY_CALLBACK_H_
 #define UTILITY_CALLBACK_H_
 
+#include "cpp98_nullptr.h"
 #include <utility>
 
 /**
  * Simple callback helper to handle function callback
  * of the form void (*)(void*, int);
+ * Fixed format intended to keep things simple. This also compiles
+ * in c++98. For a more versatile tool, look at Callback2.
+ * Intended use is e.g.g callbacks from async operations signaling
+ * completion. The int should be enough to get a status code back.
  *
  * Design intent to push user code toward the user to keep the
  * common case small and fast for embedded devices. In particular,
@@ -55,15 +60,19 @@ class Callback
     inline static void doMemberCB(void* o, int val)
         __attribute__((always_inline));
 
-    template <class Tptr, void(freeFkn)(Tptr, int)>
+    template <class Tptr, void(freeFknWithPtr)(Tptr, int)>
+    inline static void doFreeCBWithPtr(void* o, int val)
+        __attribute__((always_inline));
+
+    template <void(SimpleFreeFkn)(int)>
     inline static void doFreeCB(void* o, int val)
         __attribute__((always_inline));
 
-    using CB = void (*)(void*, int);
+    typedef void (*CB)(void*, int);
 
   public:
     // Default construct with stored ptr == nullptr.
-    Callback(){};
+    Callback() : m_cb(nullptr), m_ptr(nullptr){};
     ~Callback(){};
 
     // Call the stored function. Requires: bool(*this) == true;
@@ -73,9 +82,14 @@ class Callback
     }
 
     // Return true if a function pointer is stored.
-    explicit operator bool() const noexcept
+    operator bool() const
     {
         return m_cb != nullptr;
+    }
+
+    operator CB() const
+    {
+        return m_cb;
     }
 
     void clear()
@@ -90,19 +104,22 @@ class Callback
     template <class T, void (T::*memFkn)(int)>
     static Callback makeMemberCB(T& object)
     {
-        auto cb = doMemberCB<T, memFkn>;
-        T* obj = &object;
-        return Callback(cb, static_cast<void*>(obj));
+        return Callback(doMemberCB<T, memFkn>, static_cast<void*>(&object));
     }
 
     /**
      * Create a callback to a free function with a specific type on the pointer.
      */
     template <class Tptr, void (*fkn)(Tptr, int)>
-    static Callback makeFreeCB(Tptr ptr)
+    static Callback makeFreeCBWithPtr(Tptr ptr)
     {
-        auto cb = &doFreeCB<Tptr, fkn>;
-        return Callback(cb, static_cast<void*>(ptr));
+        return Callback(doFreeCBWithPtr<Tptr, fkn>, static_cast<void*>(ptr));
+    }
+
+    template <void (*fkn)(int)>
+    static Callback makeFreeCB()
+    {
+        return Callback(doFreeCB<fkn>, nullptr);
     }
 
     /**
@@ -128,8 +145,8 @@ class Callback
     Callback(CB cb, void* ptr) : m_cb(cb), m_ptr(ptr)
     {
     }
-    CB m_cb = nullptr;
-    void* m_ptr = nullptr;
+    CB m_cb;
+    void* m_ptr;
 };
 
 template <class T, void (T::*memFkn)(int)>
@@ -140,39 +157,45 @@ Callback::doMemberCB(void* o, int val)
     ((*obj).*(memFkn))(val);
 }
 
-template <class Tptr, void(freeFkn)(Tptr, int)>
+template <class Tptr, void(freeFknWithPtr)(Tptr, int)>
+void
+Callback::doFreeCBWithPtr(void* o, int val)
+{
+    Tptr obj = static_cast<Tptr>(o);
+    freeFknWithPtr(static_cast<Tptr>(o), val);
+}
+
+template <void(simpleFreeFkn)(int)>
 void
 Callback::doFreeCB(void* o, int val)
 {
-    Tptr obj = static_cast<Tptr>(o);
-    freeFkn(obj, val);
+    simpleFreeFkn(val);
 }
 
 /**
  * Helper macro to create Callbacks for calling a member function.
  * Example of use:
  *
- * Callback cb = MAKE_MEMBER_CB(SomeClass::memberFunction, obj);
+ * Callback cb = MAKE_MEMBER_CB(SomeClass, SomeClass::memberFunction, obj);
  *
  * where 'obj' is of type 'SomeClass'.
  */
-#define MAKE_MEMBER_CB(memFkn, object)                                 \
+#define MAKE_MEMBER_CB(objType, memFkn, object) \
     \
-(Callback::makeMemberCB<std::remove_reference<decltype(object)>::type, \
-                        &memFkn>(object))
+(Callback::makeMemberCB<objType, &memFkn>(object))
 
 /**
  * Helper macro to create Callbacks for calling a free function
  * or static class function.
  * Example of use:
  *
- * Callback cb = MAKE_FREE_CB(fkn, ptr);
+ * Callback cb = MAKE_FREE_CB(T, fkn, ptr);
  *
  * where 'ptr' is a pointer to some type T and fkn a free
  * function with signature 'void (*)(T*, int);
  */
-#define MAKE_FREE_CB(fkn, ptr) \
+#define MAKE_FREE_CB(ptr_type, fkn, ptr) \
     \
-(Callback::makeFreeCB<std::remove_reference<decltype(ptr)>::type, fkn>(ptr))
+(Callback::makeFreeCB<ptr_type*, fkn>(ptr))
 
 #endif /* UTILITY_CALLBACK_H_ */
