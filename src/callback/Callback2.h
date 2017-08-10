@@ -59,6 +59,7 @@ class Callback2;
 template <typename R, typename... Args>
 class Callback2<R(Args...)>
 {
+
     // Adaptor function for the case where void* is not forwarded
     // to the caller.
     template <R(freeFkn)(Args...)>
@@ -82,6 +83,15 @@ class Callback2<R(Args...)>
     {
         Tptr obj = static_cast<Tptr>(o);
         return freeFknWithPtr(obj, args...);
+    }
+
+    // Adapter function for the free function with extra first arg
+    // in the called function, set at callback construction.
+    template <class Functor>
+    inline static R doFunctor(void* o, Args... args)
+    {
+        auto obj = static_cast<Functor*>(o);
+        return (*obj)(args...);
     }
 
     // Type of the function pointer for the trampoline functions.
@@ -139,6 +149,20 @@ class Callback2<R(Args...)>
     static Callback2 makeMemberCB(T& object)
     {
         auto cb = &doMemberCB<T, memFkn>;
+        T* obj = &object;
+        return Callback2(cb, static_cast<void*>(obj));
+    }
+
+    /**
+     * Create a callback to a Functor or a lambda.
+     * NOTE : Only a pointer to the functor is stored. The
+     * user must ensure the functor is still valid at call time.
+     * Hence, we do not accept functor r-values.
+     */
+    template <class T>
+    static Callback2 makeFunctorCB(T& object)
+    {
+        auto cb = &doFunctor<T>;
         T* obj = &object;
         return Callback2(cb, static_cast<void*>(obj));
     }

@@ -68,6 +68,10 @@ class Callback
     inline static void doFreeCB(void* o, int val)
         __attribute__((always_inline));
 
+    template <class Functor>
+    inline static void doFunctor(void* o, int val)
+        __attribute__((always_inline));
+
     typedef void (*CB)(void*, int);
 
   public:
@@ -123,6 +127,20 @@ class Callback
     }
 
     /**
+     * Create a callback to a Functor or a lambda.
+     * NOTE : Only a pointer to the functor is stored. The
+     * user must ensure the functor is still valid at call time.
+     * Hence, we do not accept functor r-values.
+     */
+    template <class T>
+    static Callback makeFunctorCB(T& object)
+    {
+        CB cb = &doFunctor<T>;
+        T* obj = &object;
+        return Callback(cb, static_cast<void*>(obj));
+    }
+
+    /**
      * Create a callback to a free function with a void pointer, removing the
      * need for an adapter function.
      */
@@ -170,6 +188,16 @@ void
 Callback::doFreeCB(void* o, int val)
 {
     simpleFreeFkn(val);
+}
+
+// Adapter function for the free function with extra first arg
+// in the called function, set at callback construction.
+template <class Functor>
+void
+Callback::doFunctor(void* o, int val)
+{
+    Functor* obj = static_cast<Functor*>(o);
+    (*obj)(val);
 }
 
 /**

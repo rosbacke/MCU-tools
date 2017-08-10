@@ -115,6 +115,39 @@ testMemberFunction()
     assert(res == 12);
 }
 
+void
+testLambdaFunction()
+{
+    struct Functor
+    {
+        int operator()(int x, int y)
+        {
+            return x + y;
+        }
+    };
+
+    Functor fkn;
+
+    // Create simple callback to a normal free function.
+    auto cb = Callback2<int(int, int)>::makeFunctorCB(fkn);
+
+    auto res = cb(5, 3);
+    assert(res == 8);
+
+    auto t = [](int x, int y) -> int { return x + y; };
+
+    auto cb2 = Callback2<int(int, int)>::makeFunctorCB(t);
+
+    res = cb2(6, 5);
+    assert(res == 11);
+
+    auto lambda = [](int x, int y) -> int { return x + y; };
+    auto cb3 = Callback2<int(int, int)>::makeFunctorCB(lambda);
+
+    res = cb2(6, 5);
+    assert(res == 11);
+}
+
 int
 main()
 {
@@ -122,4 +155,5 @@ main()
     testFreeFunction();
     testFreeFunctionWithPtr();
     testMemberFunction();
+    testLambdaFunction();
 }

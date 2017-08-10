@@ -128,6 +128,29 @@ testMemberFunction()
     assert(o.m_val == 12);
 }
 
+struct Functor
+{
+    void operator()(int x)
+    {
+        val += x;
+    }
+    int val;
+};
+
+void
+testFunctorFunction()
+{
+    Functor fkn;
+
+    // Create simple callback to a normal free function.
+    Callback cb = Callback::makeFunctorCB(fkn);
+
+    fkn.val = 3;
+    cb(4);
+
+    assert(fkn.val == 7);
+}
+
 int
 main()
 {
