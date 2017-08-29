@@ -5,13 +5,12 @@
  *      Author: mikaelr
  */
 
-// #include "hal/PosixFileReal.h"
+//#include "hal/PosixFileReal.h"
 #include "StateChart.h"
 
 #include <gtest/gtest.h>
 
 #include <string>
-#include <iostream>
 
 using std::cout;
 using std::endl;
@@ -55,18 +54,24 @@ class TestFsmDescription
         state1,
         state2,
         state3,
+        stateIdNo // Keep this last. Gives the number of states.
     };
 
     // Needed helper function. Convert each state class into a string
     // for e.g. logging.
     static std::string toString(StateId id);
 
-    // Typename 'Event' indicate class name for rhe event class to use.
+    // Typename 'Event' indicate class name for the event class to use.
     using Event = TestEvent;
 
     // Typename 'Fsm' Indicate the class that implement our FSM.
     // External code will deliver events to this class using postEvent fkn.
     using Fsm = MyTestFsm;
+
+    // This function needs to exist. It will be called during setup phase
+    // and should perform all the needed 'sc.addState<...>()' calls to
+    // set up the state hierachy. Forward declared here.
+    static void setupStates(FsmSetup<TestFsmDescription>& sc);
 };
 
 // Our FSM class. It needs to inherit from 'FsmBase'.
@@ -74,13 +79,16 @@ class TestFsmDescription
 class MyTestFsm : public FsmBase<TestFsmDescription>
 {
   public:
-    MyTestFsm();
+    MyTestFsm() = default;
 
     int testD2 = -2;
     int testD3 = -3;
 
     int myUserFsmData = 0;
 };
+
+// Forward declaring a test state to allow transition<TestState3>();
+class TestState3;
 
 // Helper 'using' to save some typing.
 using StateId = TestFsmDescription::StateId;
@@ -110,7 +118,7 @@ class TestState1 : public StateBase<TestFsmDescription, StateId::state1>
 
     // Event delivery function. Each state needs to implement this.
     // should return 'true' if the event was handled and no more
-    // base state is to be called. Return true and the base states will
+    // base state is to be called. Return false and the base states will
     // see the event.
     bool event(const TestEvent& ev)
     {
@@ -126,12 +134,15 @@ class TestState1 : public StateBase<TestFsmDescription, StateId::state1>
         }
         return false;
     }
+
+    // Some member data. Will have the same lifetime as the state object.
+    int state1MemberData = 76;
 };
 
 // Helper base class to add common functionality. (and reduce typing.)
 // Useful for these tests but not needed i general.
 // However, each state class needs to to inherit (transitively) from
-// 'StateBase'.
+// 'StateBase'. This base class helps to reduce the repetitions.
 template <StateId id>
 class MyStateBase : public StateBase<TestFsmDescription, id>
 {
@@ -178,6 +189,9 @@ class TestState2 : public MyStateBase<StateId::state2>
 
         if (ev.m_id == EventId::testEvent1)
         {
+            // Transition is the way to change state. It honors
+            // run to completion so the exit/entry events will
+            // be called once this handler function returns.
             transition(StateId::state1);
             testData = 8;
         }
@@ -185,11 +199,15 @@ class TestState2 : public MyStateBase<StateId::state2>
         {
             testData = 15;
             fsm().testD2 = 2;
-            return false;
+            return true;
         }
         if (ev.m_id == EventId::testEvent3)
         {
-            transition(StateId::state3);
+            // Another version of transition, using the state name.
+            // Preferred since most IDE will allow you to go to the
+            // definition of the state class and eases code navigation.
+            // Might require forward declaring the state class.
+            transition<TestState3>();
         }
         testData = 9;
         return false;
@@ -215,9 +233,14 @@ class TestState3 : public MyStateBase<StateId::state3>
     {
         cout << "State3, event : " << int(ev.m_id) << endl;
 
+        // Test that we can reach data in our parent state.
+        TestState1& p = parent<TestState1>();
+        cout << p.state1MemberData << endl;
+        EXPECT_EQ(p.state1MemberData, 76);
+
         if (ev.m_id == EventId::testEvent1)
         {
-            transition(StateId::state1);
+            transition<TestState1>();
             testData = 18;
         }
         if (ev.m_id == EventId::testEvent2)
@@ -244,23 +267,26 @@ TestFsmDescription::toString(StateId id)
         return "state2";
     case TestFsmDescription::StateId::state3:
         return "state3";
+    case TestFsmDescription::StateId::stateIdNo:
+        return "max_num";
     }
     return "";
 }
 
-// Constructor of our state machine. It is responsible for setting
-// up the state hierarchy. Each state needs to have one 'addState'.
-MyTestFsm::MyTestFsm()
+// Implementation of the state registration function.
+// Should contain one 'sc.addState<...>() for each state.
+// This is done with lazy evaluation and happens when the first
+// fsm of a particular type is instantiated.
+void
+TestFsmDescription::setupStates(FsmSetup<TestFsmDescription>& sc)
 {
-    // Add a state without a parent state. Indicates that the state
-    // is a base level state.
-    addState<TestState1>();
-    addState<TestState2>();
+    sc.addState<TestState1>();
+    sc.addState<TestState2>();
 
     // Add a state with a parent state. Each time this is active the
     // parent state will be entered first. No particular depth
     // limitation exist so states can have parents recursively.
-    addState<TestState3, StateId::state1>();
+    sc.addState<TestState3, TestState1>();
 }
 
 TEST(StateChart, testStateChart)
@@ -281,7 +307,7 @@ TEST(StateChart, testStateChart)
     EXPECT_EQ(-1, testData);
 
     // Each FSM needs to be started. This will enter the given state
-    // and run constructions accordingly.
+    // as start state and run entry events accordingly.
     myFsm.setStartState(StateId::state1);
 
     EXPECT_EQ(0, testData);
