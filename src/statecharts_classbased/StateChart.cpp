@@ -6,7 +6,6 @@
  */
 
 #include "StateChart.h"
-// #include "utility/Utility.h"
 
 void
 FsmStaticData::addStateBase(int stateId, int parentId, size_t size,
@@ -33,9 +32,9 @@ FsmBaseMember::possiblyDoTransition(FsmBaseBase* fbb)
     while (m_nextState != FsmStaticData::nullStateId)
     {
         auto i = m_setup.findState(m_nextState);
+        m_nextState = FsmStaticData::nullStateId;
         if (i)
         {
-            m_nextState = FsmStaticData::nullStateId;
             doTransition(i, fbb);
         }
     }
@@ -140,6 +139,9 @@ FsmBaseMember::doTransition(const StateInfo* nextInfo, FsmBaseBase* fsm)
 void
 FsmBaseMember::cleanup()
 {
+    if (!m_currentInfo)
+        return;
+
     while (m_currentInfo->m_level > 0)
     {
         doExit(m_currentInfo);
@@ -150,21 +152,52 @@ FsmBaseMember::cleanup()
 }
 
 void
-FsmBaseMember::transition(int id)
-{
-    m_nextState = id;
-}
-
-void
 FsmBaseMember::setStartState(int id, FsmBaseBase* fsm)
 {
+    m_currentInfo = nullptr;
     const auto& sizes = m_setup.sizes();
+    m_stackFrames.clear();
     m_stackFrames.reserve(sizes.size());
     for (const auto& el : sizes)
     {
         m_stackFrames.emplace_back(el);
     }
-
-    m_currentInfo = nullptr;
     setupTransition(m_setup.findState(id), fsm);
+}
+
+ModelBase*
+FsmBaseMember::parent(int parentId)
+{
+    const StateInfo* myInfo = m_currentInfo;
+    if (myInfo->m_level == 0)
+        throw std::runtime_error("No parent available for root states.");
+
+    // Make sure the supplied type is the same as the active stack type.
+    if (parentId != myInfo->m_parentId)
+        throw std::runtime_error("Type mismatch for parent state.");
+
+    ModelBase* mb = getModelBase(myInfo->m_level - 1);
+    return mb;
+}
+
+const ModelBase*
+FsmBaseMember::activeState(int targetId) const
+{
+    if (!m_currentInfo)
+        return nullptr;
+
+    auto currentLevel = m_currentInfo->m_level;
+    auto targetInfo = m_setup.findState(targetId);
+    auto targetLevel = targetInfo->m_level;
+    if (targetLevel > currentLevel)
+        return nullptr;
+
+    // Invariant: stateFrame[targetLevel] is valid.
+    const auto* stackInfo = stateInfoAtLevel(targetLevel);
+    if (stackInfo != targetInfo)
+        return nullptr;
+
+    // Invariant: The actual requested object is active on the stack.
+    const auto* mb = getModelBase(targetLevel);
+    return mb;
 }

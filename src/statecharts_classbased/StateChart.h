@@ -54,7 +54,6 @@
 #include <cassert>
 #include <iostream>
 
-//#include "utility/Log.h"
 
 class FsmBaseBase;
 
@@ -200,6 +199,11 @@ class FsmStaticData
         return el.m_maker == nullptr ? nullptr : &el;
     }
 
+    int findState(const StateInfo* si) const
+    {
+        return si == nullptr ? nullStateId : (si - &m_states[0]);
+    }
+
     void addStateBase(int stateId, int parentId, size_t size, CreateFkn fkn);
 
     const std::vector<size_t>& sizes() const
@@ -228,13 +232,21 @@ class FsmBaseMember
         cleanup();
     }
 
-    void transition(int id);
+    void transition(int id)
+    {
+        m_nextState = id;
+    }
 
     void setStartState(int id, FsmBaseBase* hsm);
 
-    const StateInfo* activeInfo() const
+    const StateInfo* activeStateInfo() const
     {
         return m_currentInfo;
+    }
+
+    int activeStateId() const
+    {
+        return m_setup.findState(m_currentInfo);
     }
 
     // Return the working area for a particular level.
@@ -243,7 +255,25 @@ class FsmBaseMember
         return m_stackFrames[level].m_activeState.get();
     }
 
+    const ModelBase* getModelBase(int level) const
+    {
+        return m_stackFrames[level].m_activeState.get();
+    }
+
     void possiblyDoTransition(FsmBaseBase* fbb);
+
+    const StateInfo* stateInfoAtLevel(int level) const
+    {
+        return m_stackFrames[level].m_stateInfo;
+    }
+
+    // Given current state, return the ModelBase of the parent if available,
+    // or nullptr.
+    ModelBase* parent(int parentId);
+
+    // Given a target state Id, return a pointer to the ModelBase if it
+    // is currently active on the stack at any level.
+    const ModelBase* activeState(int targetId) const;
 
   private:
     // Implement placement destruction for the smart pointer.
@@ -294,6 +324,7 @@ class FsmBaseMember
     {
         return m_stackFrames[level].m_stateInfo;
     }
+
     std::vector<LevelData> m_stackFrames;
 
     const StateInfo* m_currentInfo = nullptr;
@@ -388,10 +419,9 @@ class FsmSetup
             auto p = new (store) StateModel<FsmDesc, State>(StateArgs(fsm));
             return static_cast<ModelBase*>(p);
         };
-        auto size = sizeof(StateModel<FsmDesc, State>);
         m_data.addStateBase(static_cast<int>(State::stateId),
-                            static_cast<int>(ParentState::stateId), size,
-                            makerFkn);
+                            static_cast<int>(ParentState::stateId),
+                            sizeof(StateModel<FsmDesc, State>), makerFkn);
     }
 
     const FsmStaticData& data()
@@ -410,27 +440,42 @@ class FsmBaseEvent : public FsmBaseBase
     FsmBaseEvent(const FsmStaticData& setup) : FsmBaseBase(setup)
     {
     }
+
+    // Post an event and process the queue in case it was empty before.
+    // Recommended unless finer grained control is needed.
     void postEvent(const Event& ev)
     {
-        // LOG_DEBUG << "Post event:" << int(ev.m_id);
         bool empty = m_eventQueue.empty();
         m_eventQueue.push(ev);
         if (empty)
         { // Nobody else is currently processing events.
-            while (!m_eventQueue.empty())
-            {
-                // Keep a local copy in case the vector reallocate during the
-                // event processing. (due to internal event posting.)
-                Event ev = m_eventQueue.front();
-                processEvent(ev);
-                m_eventQueue.pop();
-            }
+            processQueue();
         }
     }
 
+    // Add an event to the queue without processing it.
+    void addEvent(const Event& ev)
+    {
+        m_eventQueue.push(ev);
+    }
+
+    // Process the queue.
+    void processQueue()
+    {
+        while (!m_eventQueue.empty())
+        {
+            // Keep a local copy in case the vector reallocate during the
+            // event processing. (due to internal event posting.)
+            Event ev = m_eventQueue.front();
+            processEvent(ev);
+            m_eventQueue.pop();
+        }
+    }
+
+  private:
     void processEvent(const Event& ev)
     {
-        auto activeInfo = m_base.activeInfo();
+        auto activeInfo = m_base.activeStateInfo();
         if (!activeInfo)
             return;
 
@@ -450,7 +495,6 @@ class FsmBaseEvent : public FsmBaseBase
         return static_cast<EventInterface<Event>*>(sbb)->event(ev);
     }
 
-  private:
     VecQueue<Event> m_eventQueue;
 };
 
@@ -466,8 +510,10 @@ class FsmBase : public FsmBaseEvent<typename FsmDesc::Event>
     using FsmDescription = FsmDesc;
     static const constexpr int stateNo = static_cast<int>(StateId::stateIdNo);
 
-    template <class FD, typename FD::StateId id>
-    friend class StateBase;
+    static StateId nullStateId()
+    {
+        return static_cast<StateId>(FsmStaticData::nullStateId);
+    }
 
     FsmBase() : FsmBaseEvent<Event>(instance())
     {
@@ -484,7 +530,37 @@ class FsmBase : public FsmBaseEvent<typename FsmDesc::Event>
         FsmBaseBase::m_base.setStartState(static_cast<int>(id), this);
     }
 
+    /**
+     * Return the identifier of the currently active state.
+     */
+    StateId currentStateId() const
+    {
+        return static_cast<StateId>(FsmBaseBase::m_base.activeStateId());
+    }
+
+    /**
+     * Return the current active state object. Do note that this
+     * requires knowledge of the active state and it's type. If the
+     * State type is a mismatch, nullptr will be returned. Typically used
+     * in conjunction with currentStateId. Also, not very fast.
+     */
+    template <class State>
+    const State* currentState() const;
+
+    /**
+     * Return an active state object. This is one of the current state
+     * or one of its substates that are currently active. Which one
+     * is determined by the supplied template class. If the
+     * State type is a mismatch, nullptr will be returned. Typically used
+     * in conjunction with currentStateId. Also, not very fast.
+     */
+    template <class State>
+    const State* activeState() const;
+
   private:
+    template <class FD, typename FD::StateId id>
+    friend class StateBase;
+
     static const FsmStaticData& instance()
     {
         static FsmSetup<FsmDesc> base;
@@ -497,18 +573,9 @@ template <class ParentState>
 ParentState&
 StateBase<FsmDesc, stId>::parent()
 {
-    using StateInfo = FsmStaticData::StateInfo;
-    const StateInfo* myInfo = fsm().m_base.activeInfo();
-    if (myInfo->m_level == 0)
-        throw std::runtime_error("No parent available for root states.");
-
     StateId parentId = ParentState::stateId;
-    if (parentId != static_cast<StateId>(myInfo->m_parentId))
-        throw std::runtime_error("Type mismatch for parent state.");
-
-    ModelBase* mb = fsm().m_base.getModelBase(myInfo->m_level - 1);
-    auto* sm = static_cast<StateModel<FsmDesc, ParentState>*>(mb);
-    return sm->m_state;
+    ModelBase* mb = fsm().m_base.parent(static_cast<int>(parentId));
+    return static_cast<StateModel<FsmDesc, ParentState>*>(mb)->m_state;
 }
 
 template <typename FsmDesc, typename FsmDesc::StateId stId>
@@ -518,6 +585,32 @@ StateBase<FsmDesc, stId>::transition()
 {
     static constexpr const StateId targetId = TargetState::stateId;
     m_fsm->m_base.transition(static_cast<int>(targetId));
+}
+
+template <class FsmDesc>
+template <class State>
+const State*
+FsmBase<FsmDesc>::currentState() const
+{
+    if (State::stateId !=
+        static_cast<StateId>(FsmBaseBase::m_base.activeStateId()))
+        return nullptr;
+
+    const FsmStaticData::StateInfo* p = FsmBaseBase::m_base.activeStateInfo();
+
+    const auto* mb = FsmBaseBase::m_base.getModelBase(p->m_level);
+    return &(static_cast<const StateModel<FsmDesc, State>*>(mb)->m_state);
+}
+
+template <class FsmDesc>
+template <class State>
+const State*
+FsmBase<FsmDesc>::activeState() const
+{
+    int targetId = static_cast<int>(State::stateId);
+    const ModelBase* mb = FsmBaseBase::m_base.activeState(targetId);
+    return mb ? &(static_cast<const StateModel<FsmDesc, State>*>(mb)->m_state)
+              : nullptr;
 }
 
 #endif /* SRC_STATECHART_STATECHART_H_ */

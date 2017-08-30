@@ -5,7 +5,6 @@
  *      Author: mikaelr
  */
 
-//#include "hal/PosixFileReal.h"
 #include "StateChart.h"
 
 #include <gtest/gtest.h>
@@ -252,6 +251,7 @@ class TestState3 : public MyStateBase<StateId::state3>
         testData = 19;
         return false;
     }
+    int state3MemberData = 79;
 };
 
 // Implementation of the state 'toString'.
@@ -295,6 +295,11 @@ TEST(StateChart, testStateChart)
 
     // Construct the FSM. Will set up the state tree.
     MyTestFsm myFsm;
+
+    // Default constructing the FSM does not mean starting the FSM.
+    // We are not in a valid state yet.
+    EXPECT_EQ(myFsm.currentStateId(), MyTestFsm::nullStateId());
+
     cout << "do 2" << endl;
 
     EXPECT_EQ(-2, myFsm.testD2);
@@ -307,11 +312,36 @@ TEST(StateChart, testStateChart)
     EXPECT_EQ(-1, testData);
 
     // Each FSM needs to be started. This will enter the given state
-    // as start state and run entry events accordingly.
+    // as start state and run entry events accordingly. After this point
+    // we should always be in a valid state when a new event starts processing.
     myFsm.setStartState(StateId::state1);
-
+    EXPECT_EQ(myFsm.currentStateId(), StateId::state1);
     EXPECT_EQ(0, testData);
     cout << "do 4" << endl;
+
+    // We Know that state 1 is active. Try to get access, first with wrong
+    // state.
+    {
+        const TestState2* p2 = myFsm.currentState<TestState2>();
+        EXPECT_EQ(p2, nullptr);
+
+        const TestState1* p = myFsm.currentState<TestState1>();
+        EXPECT_NE(p, nullptr);
+
+        int val = p->state1MemberData;
+        EXPECT_EQ(val, 76);
+    }
+    // Same thing with 'activeState'.
+    {
+        const TestState2* p2 = myFsm.activeState<TestState2>();
+        EXPECT_EQ(p2, nullptr);
+
+        const TestState1* p = myFsm.activeState<TestState1>();
+        EXPECT_NE(p, nullptr);
+
+        int val = p->state1MemberData;
+        EXPECT_EQ(val, 76);
+    }
 
     // Pos an event to the state machine. It will be delivered to the current
     // active
@@ -320,26 +350,65 @@ TEST(StateChart, testStateChart)
     EXPECT_EQ(1, testData);
     cout << "do 5" << endl;
 
+    EXPECT_EQ(myFsm.currentStateId(), StateId::state1);
+
     myFsm.postEvent(ev1); // Pass over to state2.
     EXPECT_EQ(5, testData);
     EXPECT_EQ(-2, myFsm.testD2);
+    EXPECT_EQ(myFsm.currentStateId(), StateId::state2);
+
     cout << "do 6" << endl;
 
     myFsm.postEvent(ev2);
     EXPECT_EQ(15, testData);
     EXPECT_EQ(2, myFsm.testD2);
+    EXPECT_EQ(myFsm.currentStateId(), StateId::state2);
+
     cout << "do 7" << endl;
 
     myFsm.postEvent(ev1);
     EXPECT_EQ(0, testData);
     EXPECT_EQ(2, myFsm.testD2);
+    EXPECT_EQ(myFsm.currentStateId(), StateId::state1);
     cout << "do 8" << endl;
 
     myFsm.postEvent(ev3); // Pass over to state3.
+    EXPECT_EQ(myFsm.currentStateId(), StateId::state3);
 
     // EXPECT_EQ(3, myFsm.testD3);
     // From state 3 constructor.
     EXPECT_EQ(15, testData);
+
+    // We Know that state 3 is active, which is a sub state of state 1.
+    // Try to get access, first with wrong
+    // state.
+    {
+        const TestState1* p2 = myFsm.currentState<TestState1>();
+        EXPECT_FALSE(p2);
+
+        const TestState3* p = myFsm.currentState<TestState3>();
+        EXPECT_TRUE(p);
+
+        int val = p->state3MemberData;
+        EXPECT_EQ(val, 79);
+    }
+    // Same thing with 'activeState'. Both states are active and should succeed.
+    {
+        const TestState1* p1 = myFsm.activeState<TestState1>();
+        EXPECT_TRUE(p1);
+        int val1 = p1->state1MemberData;
+        EXPECT_EQ(val1, 76);
+
+        const TestState3* p3 = myFsm.activeState<TestState3>();
+        EXPECT_TRUE(p3);
+
+        int val3 = p3->state3MemberData;
+        EXPECT_EQ(val3, 79);
+
+        // Still state 2 is not active.
+        const TestState2* p2 = myFsm.currentState<TestState2>();
+        EXPECT_FALSE(p2);
+    }
 
     myFsm.postEvent(ev2); // Check parent.
 
