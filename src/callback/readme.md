@@ -290,6 +290,7 @@ It contain this lines:
 
     cr1 |= USART_CR1_TXEIE | USART_CR1_IDLEIE;
     USART1->CR1 = cr1;
+```
 
 The macro MAKE_MEMBER_CB2 take away some of the ugliness assigning member
 functions. Expanded it would look something like this:
