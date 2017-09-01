@@ -178,7 +178,7 @@ the essence.
 The basic idea is here implemented with a concrete class callback that only
 allow one type of function call signature. However it is straight forward
 to generalize this to a std::function style template. One could do this
-like this using partial template spezialization:
+like this using partial template specialization:
 
 ```
     template<typename T>
@@ -297,7 +297,7 @@ functions. Expanded it would look something like this:
 
 
 ```
-    isrCB.usart1 = Callback2<void()>::makeMemberCB<UsartDriver,  &UsartDriver::isr>(*this);
+    isrCB.usart1 = Callback2<void()>::makeMemberCB<UsartService,  &UsartService::isr>(*this);
 ```
 
 With the macro it reads fairly ok. Without, a bit non-intuitive and verbose
