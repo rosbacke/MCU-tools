@@ -136,7 +136,44 @@ class Callback2<R(Args...)>
      * the pointer.
      */
     template <R (*fkn)(Args... args)>
-    static Callback2 makeFreeCB()
+    Callback2& set()
+    {
+        m_cb = &doFreeCB<fkn>;
+        m_ptr = nullptr;
+        return *this;
+    }
+
+    /**
+     * Create a callback to a member function to a given object.
+     */
+    template <class T, R (T::*memFkn)(Args... args)>
+    Callback2& set(T& object)
+    {
+        m_cb = &doMemberCB<T, memFkn>;
+        m_ptr = static_cast<void*>(&object);
+        return *this;
+    }
+
+    /**
+     * Create a callback to a Functor or a lambda.
+     * NOTE : Only a pointer to the functor is stored. The
+     * user must ensure the functor is still valid at call time.
+     * Hence, we do not accept functor r-values.
+     */
+    template <class T>
+    Callback2& set(T& object)
+    {
+        m_cb = &doFunctor<T>;
+        m_ptr = static_cast<void*>(&object);
+        return *this;
+    }
+
+    /**
+     * Create a callback to a free function with a specific type on
+     * the pointer.
+     */
+    template <R (*fkn)(Args... args)>
+    static Callback2 make()
     {
         auto cb = &doFreeCB<fkn>;
         return Callback2(cb, nullptr);
@@ -146,7 +183,7 @@ class Callback2<R(Args...)>
      * Create a callback to a member function to a given object.
      */
     template <class T, R (T::*memFkn)(Args... args)>
-    static Callback2 makeMemberCB(T& object)
+    static Callback2 make(T& object)
     {
         auto cb = &doMemberCB<T, memFkn>;
         T* obj = &object;
@@ -160,7 +197,7 @@ class Callback2<R(Args...)>
      * Hence, we do not accept functor r-values.
      */
     template <class T>
-    static Callback2 makeFunctorCB(T& object)
+    static Callback2 make(T& object)
     {
         auto cb = &doFunctor<T>;
         T* obj = &object;
@@ -220,10 +257,10 @@ class Callback2<R(Args...)>
  * @param memFkn Full name of the member function including class name.
  * @object object which the member function should be called on.
  */
-#define MAKE_MEMBER_CB2(fknType, memFkn, object) \
+#define MAKE_MEMBER_CB2(fknType, memFkn, object)                         \
     \
-(Callback2<fknType>::makeMemberCB<               \
-        std::remove_reference<decltype(object)>::type, &memFkn>(object))
+(Callback2<fknType>::make<std::remove_reference<decltype(object)>::type, \
+                          &memFkn>(object))
 
 /**
  * Helper macro to create Callbacks for calling a free function
@@ -243,7 +280,7 @@ class Callback2<R(Args...)>
  */
 #define MAKE_FREE_CB2(fknType, fkn, ptr)                                    \
     \
-(Callback2<fknType>::makeFreeCB<std::remove_reference<decltype(ptr)>::type, \
-                                fkn>(ptr))
+(Callback2<fknType>::make<std::remove_reference<decltype(ptr)>::type, fkn>( \
+        ptr))
 
 #endif /* UTILITY_CALLBACK_H_ */

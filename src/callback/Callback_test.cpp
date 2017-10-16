@@ -44,7 +44,7 @@ void
 testFreeFunction()
 {
     // Create simple callback to a normal free function.
-    Callback cb = Callback::makeFreeCB<testAdd>();
+    Callback cb = Callback::make<testAdd>();
 
     // Try making a call. Check result.
     testVar = 2;
@@ -58,7 +58,7 @@ testFreeFunction()
     assert(testVar == 7);
 
     // Test assign.
-    cb = Callback::makeFreeCB<testDiff>();
+    cb = Callback::make<testDiff>();
     testVar = 4;
     cb(3);
     assert(testVar == 1);
@@ -89,7 +89,7 @@ testFreeFunctionWithPtr()
     TestObj o;
 
     // Create simple callback to a normal free function.
-    Callback cb = Callback::makeFreeCBWithPtr<TestObj*, adder>(&o);
+    Callback cb = Callback::make<TestObj*, adder>(&o);
 
     o.m_val = 6;
     cb(3);
@@ -106,7 +106,7 @@ testMemberFunction()
     TestObj o;
 
     // Create member function callback.
-    Callback cb = Callback::makeMemberCB<TestObj, &TestObj::add>(o);
+    Callback cb = Callback::make<TestObj, &TestObj::add>(o);
 
     o.m_val = 6;
     cb(3);
@@ -143,7 +143,7 @@ testFunctorFunction()
     Functor fkn;
 
     // Create simple callback to a normal free function.
-    Callback cb = Callback::makeFunctorCB(fkn);
+    Callback cb = Callback::make(fkn);
 
     fkn.val = 3;
     cb(4);

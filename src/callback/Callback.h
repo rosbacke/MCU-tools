@@ -103,10 +103,32 @@ class Callback
     }
 
     /**
+     * Set callback to a member function to a given object.
+     */
+    template <class T, void (T::*memFkn)(int)>
+    Callback& set(T& object)
+    {
+        m_cb = doMemberCB<T, memFkn>;
+        m_ptr = static_cast<void*>(&object);
+        return *this;
+    }
+
+    /**
+     * Set callback to a free function with a specific type on the pointer.
+     */
+    template <class Tptr, void (*fkn)(Tptr, int)>
+    Callback& set(Tptr ptr)
+    {
+        m_cb = doFreeCBWithPtr<Tptr, fkn>;
+        m_ptr = static_cast<void*>(ptr);
+        return *this;
+    }
+
+    /**
      * Create a callback to a member function to a given object.
      */
     template <class T, void (T::*memFkn)(int)>
-    static Callback makeMemberCB(T& object)
+    static Callback make(T& object)
     {
         return Callback(doMemberCB<T, memFkn>, static_cast<void*>(&object));
     }
@@ -115,13 +137,13 @@ class Callback
      * Create a callback to a free function with a specific type on the pointer.
      */
     template <class Tptr, void (*fkn)(Tptr, int)>
-    static Callback makeFreeCBWithPtr(Tptr ptr)
+    static Callback make(Tptr ptr)
     {
         return Callback(doFreeCBWithPtr<Tptr, fkn>, static_cast<void*>(ptr));
     }
 
     template <void (*fkn)(int)>
-    static Callback makeFreeCB()
+    static Callback make()
     {
         return Callback(doFreeCB<fkn>, nullptr);
     }
@@ -133,7 +155,7 @@ class Callback
      * Hence, we do not accept functor r-values.
      */
     template <class T>
-    static Callback makeFunctorCB(T& object)
+    static Callback make(T& object)
     {
         CB cb = &doFunctor<T>;
         T* obj = &object;
@@ -145,7 +167,7 @@ class Callback
      * need for an adapter function.
      */
     template <CB fkn>
-    static Callback makeVoidCB(void* ptr = nullptr)
+    static Callback make(void* ptr = nullptr)
     {
         return Callback(fkn, ptr);
     }
@@ -154,7 +176,7 @@ class Callback
      * Create a callback using a run-time variable fkn pointer using voids. No
      * adapter function is used.
      */
-    static Callback makeVoidCB(CB fkn, void* ptr = nullptr)
+    static Callback make(CB fkn, void* ptr = nullptr)
     {
         return Callback(fkn, ptr);
     }
@@ -210,7 +232,7 @@ Callback::doFunctor(void* o, int val)
  */
 #define MAKE_MEMBER_CB(objType, memFkn, object) \
     \
-(Callback::makeMemberCB<objType, &memFkn>(object))
+(Callback::make<objType, &memFkn>(object))
 
 /**
  * Helper macro to create Callbacks for calling a free function
@@ -224,6 +246,6 @@ Callback::doFunctor(void* o, int val)
  */
 #define MAKE_FREE_CB(ptr_type, fkn, ptr) \
     \
-(Callback::makeFreeCB<ptr_type*, fkn>(ptr))
+(Callback::make<ptr_type*, fkn>(ptr))
 
 #endif /* UTILITY_CALLBACK_H_ */

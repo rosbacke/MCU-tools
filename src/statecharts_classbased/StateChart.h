@@ -54,7 +54,6 @@
 #include <cassert>
 #include <iostream>
 
-
 class FsmBaseBase;
 
 /**

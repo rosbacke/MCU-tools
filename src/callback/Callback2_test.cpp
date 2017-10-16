@@ -37,7 +37,7 @@ void
 testFreeFunction()
 {
     // Create simple callback to a normal free function.
-    auto cb = Callback2<int(int, int)>::makeFreeCB<testAdd>();
+    auto cb = Callback2<int(int, int)>::make<testAdd>();
 
     // Try making a call. Check result.
     int res = cb(2, 3);
@@ -49,7 +49,7 @@ testFreeFunction()
     assert(res2 == 7);
 
     // Test assign.
-    cb = Callback2<int(int, int)>::makeFreeCB<testDiff>();
+    cb = Callback2<int(int, int)>::make<testDiff>();
     res = cb(5, 2);
     assert(res == 3);
 }
@@ -93,7 +93,7 @@ testMemberFunction()
     TestObj o;
 
     // Create member function callback.
-    auto cb = Callback2<int(int)>::makeMemberCB<TestObj, &TestObj::add>(o);
+    auto cb = Callback2<int(int)>::make<TestObj, &TestObj::add>(o);
 
     o.m_val = 6;
     int res = cb(3);
@@ -103,8 +103,9 @@ testMemberFunction()
     res = cb(9);
     assert(res == 12);
 
-    // Try MACRO construction.
-    auto cb2 = MAKE_MEMBER_CB2(int(int), TestObj::add, o);
+    // Try member construction.
+    Callback2<int(int)> cb2;
+    cb2.set<TestObj, &TestObj::add>(o);
 
     o.m_val = 6;
     res = cb2(3);
@@ -129,20 +130,20 @@ testLambdaFunction()
     Functor fkn;
 
     // Create simple callback to a normal free function.
-    auto cb = Callback2<int(int, int)>::makeFunctorCB(fkn);
+    auto cb = Callback2<int(int, int)>::make(fkn);
 
     auto res = cb(5, 3);
     assert(res == 8);
 
     auto t = [](int x, int y) -> int { return x + y; };
 
-    auto cb2 = Callback2<int(int, int)>::makeFunctorCB(t);
+    auto cb2 = Callback2<int(int, int)>::make(t);
 
     res = cb2(6, 5);
     assert(res == 11);
 
     auto lambda = [](int x, int y) -> int { return x + y; };
-    auto cb3 = Callback2<int(int, int)>::makeFunctorCB(lambda);
+    auto cb3 = Callback2<int(int, int)>::make(lambda);
 
     res = cb2(6, 5);
     assert(res == 11);
