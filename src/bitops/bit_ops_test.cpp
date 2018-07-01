@@ -9,17 +9,17 @@
 
 #include <gtest/gtest.h>
 
-using bitops::setBit;
-using bitops::setBits;
+using bitops::bitFieldMask;
+using bitops::bitWidth;
 using bitops::clearBit;
 using bitops::clearBits;
-using bitops::modifyBits;
-using bitops::bitWidth;
-using bitops::WordUpdate;
-using bitops::bitFieldMask;
-using bitops::encodeBitField;
 using bitops::decodeBitField;
+using bitops::encodeBitField;
+using bitops::modifyBits;
 using bitops::resize_cast;
+using bitops::setBit;
+using bitops::setBits;
+using bitops::WordUpdate;
 // using bitops::encodeBitFieldTyped;
 // using bitops::decodeBitFieldTyped;
 
@@ -102,7 +102,7 @@ TEST(bitops, bitWidth)
 
 TEST(bitops, WordUpdate)
 {
-	auto wu = WordUpdate<uint32_t>();
+    auto wu = WordUpdate<uint32_t>();
     EXPECT_EQ(wu.toClear, 0);
     EXPECT_EQ(wu.toSet, 0);
 
@@ -121,7 +121,7 @@ TEST(bitops, WordUpdate)
 
 TEST(bitops, WordUpdate2)
 {
-	auto wu = WordUpdate<uint32_t>().setBits(0xff000000).clearBits(0xff);
+    auto wu = WordUpdate<uint32_t>().setBits(0xff000000).clearBits(0xff);
 
     uint32_t val = 0x5555aaaa;
     update(val, wu);
@@ -132,15 +132,15 @@ TEST(bitops, WordUpdate2)
     update(val2, wu);
     EXPECT_EQ(val2, 0xff55a00f);
 
-	auto wu2 = WordUpdate<uint8_t>().setBit(1).clearBit(4);
-	uint8_t val3 = '\x55';
-	update(val3, wu2);
+    auto wu2 = WordUpdate<uint8_t>().setBit(1).clearBit(4);
+    uint8_t val3 = '\x55';
+    update(val3, wu2);
     EXPECT_EQ(val3, 0x47);
 }
 
 TEST(bitops, WordUpdate_operators)
 {
-	WordUpdate<uint32_t> wu;
+    WordUpdate<uint32_t> wu;
     EXPECT_EQ(wu.toClear, 0);
     EXPECT_EQ(wu.toSet, 0);
 
@@ -166,9 +166,7 @@ TEST(bitops, WordUpdate_operators)
     uint16_t val3 = 0x4466;
     val3 %= resize_cast<uint16_t>(wu2);
     EXPECT_EQ(val3, 0x4465);
-
 }
-
 
 TEST(bitops, bitFieldMask)
 {

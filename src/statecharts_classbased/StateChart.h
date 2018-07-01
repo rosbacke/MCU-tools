@@ -62,9 +62,7 @@ class FsmBaseBase;
  */
 struct StateArgs
 {
-    StateArgs(FsmBaseBase* fsmBase) : m_fsmBase(fsmBase)
-    {
-    }
+    StateArgs(FsmBaseBase* fsmBase) : m_fsmBase(fsmBase) {}
 
     FsmBaseBase* m_fsmBase;
 };
@@ -148,9 +146,7 @@ class StateBase
 class ModelBase
 {
   public:
-    virtual ~ModelBase()
-    {
-    }
+    virtual ~ModelBase() {}
 };
 
 /**
@@ -160,9 +156,7 @@ class ModelBase
 class FsmStaticData
 {
   public:
-    explicit FsmStaticData(int stateNo) : m_states(stateNo)
-    {
-    }
+    explicit FsmStaticData(int stateNo) : m_states(stateNo) {}
 
     static const constexpr int nullStateId = -1;
 
@@ -178,9 +172,7 @@ class FsmStaticData
     // Collection of meta data for one state.
     struct StateInfo
     {
-        StateInfo() : m_maker(nullptr)
-        {
-        }
+        StateInfo() : m_maker(nullptr) {}
         template <class StateId>
         StateInfo(StateId parentId, int level, const CreateFkn& fkn)
             : m_parentId(static_cast<int>(parentId)), m_level(level),
@@ -222,9 +214,7 @@ class FsmBaseMember
 {
   public:
     using StateInfo = FsmStaticData::StateInfo;
-    FsmBaseMember(const FsmStaticData& setup) : m_setup(setup)
-    {
-    }
+    FsmBaseMember(const FsmStaticData& setup) : m_setup(setup) {}
 
     ~FsmBaseMember()
     {
@@ -336,13 +326,9 @@ class FsmBaseMember
 class FsmBaseBase
 {
   protected:
-    FsmBaseBase(const FsmStaticData& setup) : m_base(setup)
-    {
-    }
+    FsmBaseBase(const FsmStaticData& setup) : m_base(setup) {}
 
-    ~FsmBaseBase()
-    {
-    }
+    ~FsmBaseBase() {}
 
     FsmBaseMember m_base;
 };
@@ -351,9 +337,7 @@ template <class Event>
 class EventInterface : public ModelBase
 {
   public:
-    ~EventInterface() override
-    {
-    }
+    ~EventInterface() override {}
     virtual bool event(const Event& ev) = 0;
 };
 
@@ -361,16 +345,12 @@ template <class FsmDesc, class St>
 class StateModel : public EventInterface<typename FsmDesc::Event>
 {
   public:
-    StateModel(StateArgs args) : m_state(args)
-    {
-    }
+    StateModel(StateArgs args) : m_state(args) {}
     bool event(const typename FsmDesc::Event& event) override
     {
         return m_state.event(event);
     }
-    ~StateModel() override
-    {
-    }
+    ~StateModel() override {}
 
     St m_state;
 };
@@ -436,9 +416,7 @@ template <class Event>
 class FsmBaseEvent : public FsmBaseBase
 {
   public:
-    FsmBaseEvent(const FsmStaticData& setup) : FsmBaseBase(setup)
-    {
-    }
+    FsmBaseEvent(const FsmStaticData& setup) : FsmBaseBase(setup) {}
 
     // Post an event and process the queue in case it was empty before.
     // Recommended unless finer grained control is needed.
@@ -514,9 +492,7 @@ class FsmBase : public FsmBaseEvent<typename FsmDesc::Event>
         return static_cast<StateId>(FsmStaticData::nullStateId);
     }
 
-    FsmBase() : FsmBaseEvent<Event>(instance())
-    {
-    }
+    FsmBase() : FsmBaseEvent<Event>(instance()) {}
 
     ~FsmBase() = default;
 

@@ -41,7 +41,6 @@ setBit(Storage& val)
     val |= (1 << bitNo);
 }
 
-
 /**
  * Set a bit in an integral type.
  *
@@ -130,7 +129,6 @@ clearBits(Storage& val)
     val &= ~clearValue;
 }
 
-
 /**
  * Clear a number of bits in an integral type.
  * Bits set to '1' in clearValue are cleared to '0' in val.
@@ -146,7 +144,7 @@ clearBits(Storage& val, Storage clearValue)
     val &= ~clearValue;
 }
 
-template<class Store2>
+template <class Store2>
 struct resize_cast;
 
 /**
@@ -158,8 +156,7 @@ template <class Storage>
 struct WordUpdate
 {
     WordUpdate() = default;
-    WordUpdate(Storage clear, Storage set) : toClear(clear), toSet(set)
-    {}
+    WordUpdate(Storage clear, Storage set) : toClear(clear), toSet(set) {}
 
     /// Bits set to '1' are forced to 0 in the final write.
     Storage toClear = static_cast<Storage>(0);
@@ -178,95 +175,101 @@ struct WordUpdate
     // Create a new storage with a different width, preserving those
     // bits that remains. When casting to a smaller size, this is a
     // potentially destructive operation.
-    template<class Store2>
+    template <class Store2>
     WordUpdate<Store2> resize_cast() const
-	{
-    	Store2 dummy;
-    	return makeResize(*this, dummy);
-	}
+    {
+        Store2 dummy;
+        return makeResize(*this, dummy);
+    }
 
     // When applying the WordUpdate, set bit 'bitNo'
     WordUpdate& setBit(int bitNo)
     {
-    	bitops::setBit(toSet, bitNo);
-    	bitops::clearBit(toClear, bitNo);
-    	return *this;
+        bitops::setBit(toSet, bitNo);
+        bitops::clearBit(toClear, bitNo);
+        return *this;
     }
 
     // When applying the WordUpdate, clear bit 'bitNo'
     WordUpdate& clearBit(int bitNo)
     {
-    	bitops::clearBit(toSet, bitNo);
-    	bitops::setBit(toClear, bitNo);
-    	return *this;
+        bitops::clearBit(toSet, bitNo);
+        bitops::setBit(toClear, bitNo);
+        return *this;
     }
 
     // When applying the WordUpdate, Set all bits == 1 in bitMask, to 1.
     WordUpdate& setBits(const Storage& bitMask)
     {
-    	bitops::setBits(toSet, bitMask);
-    	bitops::clearBits(toClear, bitMask);
-    	return *this;
+        bitops::setBits(toSet, bitMask);
+        bitops::clearBits(toClear, bitMask);
+        return *this;
     }
 
     // When applying the WordUpdate, Clear all bits == 1 in bitMask, to 0.
     WordUpdate& clearBits(const Storage& bitMask)
     {
-    	bitops::clearBits(toSet, bitMask);
-    	bitops::setBits(toClear, bitMask);
-    	return *this;
+        bitops::clearBits(toSet, bitMask);
+        bitops::setBits(toClear, bitMask);
+        return *this;
     }
 
     WordUpdate(const bitops::resize_cast<Storage>& rc)
-    : toClear(rc.wu_new.toClear), toSet(rc.wu_new.toSet) {}
+        : toClear(rc.wu_new.toClear), toSet(rc.wu_new.toSet)
+    {
+    }
 
     // Helper function to perform resize operation.
-    template<class Store2>
-    static WordUpdate<Store2> makeResize(const WordUpdate<Storage>& wuFrom, Store2 dummy)
-	{
-    	WordUpdate<Store2> wu;
-    	wu.toClear = static_cast<Store2>(wuFrom.toClear);
-    	wu.toSet = static_cast<Store2>(wuFrom.toSet);
-    	return wu;
-	}
+    template <class Store2>
+    static WordUpdate<Store2> makeResize(const WordUpdate<Storage>& wuFrom,
+                                         Store2 dummy)
+    {
+        WordUpdate<Store2> wu;
+        wu.toClear = static_cast<Store2>(wuFrom.toClear);
+        wu.toSet = static_cast<Store2>(wuFrom.toSet);
+        return wu;
+    }
 };
-
 
 // Free function variant for WordUpdate rezise_cast.
 // Need class/function object to fix type deduction.
-// Need inheritance to let this class be part of operator resolution for operator %, %=.
-template<class Store2>
+// Need inheritance to let this class be part of operator resolution for
+// operator %, %=.
+template <class Store2>
 struct resize_cast : public WordUpdate<Store2>
 {
-	template<typename Storage>
-	explicit resize_cast(const WordUpdate<Storage>& wu)
-	: WordUpdate<Store2>(WordUpdate<Storage>::makeResize(wu, static_cast<Store2>(0)))
-	  {
-	  }
+    template <typename Storage>
+    explicit resize_cast(const WordUpdate<Storage>& wu)
+        : WordUpdate<Store2>(
+              WordUpdate<Storage>::makeResize(wu, static_cast<Store2>(0)))
+    {
+    }
 };
 
 /**
  * Apply a WordUpdate to a value of the relevant type.
  */
-template<class Storage>
-void update(Storage& s, const WordUpdate<Storage>& wu)
+template <class Storage>
+void
+update(Storage& s, const WordUpdate<Storage>& wu)
 {
-	Storage t = s;
-	clearBits<Storage>(t, wu.toClear);
-	setBits<Storage>(t, wu.toSet);
-	s = t;
+    Storage t = s;
+    clearBits<Storage>(t, wu.toClear);
+    setBits<Storage>(t, wu.toSet);
+    s = t;
 }
 
 /**
  * Apply a WordUpdate to a volatile reference the relevant type.
  */
-template<class Storage>
-void update(volatile Storage& s, const WordUpdate<Storage>& wu)
+template <class Storage>
+void
+update(volatile Storage& s, const WordUpdate<Storage>& wu)
 {
-	Storage t = s;
-	clearBits<Storage>(t, wu.toClear);
-	setBits<Storage>(t, wu.toSet);
-	s = t;
+    Storage t = s;
+    clearBits<Storage>(t, wu.toClear);
+    setBits<Storage>(t, wu.toSet);
+    s = t;
 }
 
 /**
@@ -294,7 +297,7 @@ template <class Storage>
 Storage&
 operator%=(Storage& lhs, const WordUpdate<Storage>& rhs)
 {
-	update<Storage>(lhs, rhs);
+    update<Storage>(lhs, rhs);
     return lhs;
 }
 
@@ -310,7 +313,7 @@ template <class Storage>
 volatile Storage&
 operator%=(volatile Storage& lhs, const WordUpdate<Storage>& rhs)
 {
-	update<Storage>(lhs, rhs);
+    update<Storage>(lhs, rhs);
     return lhs;
 }
 
@@ -377,15 +380,19 @@ class BitField
     using Storage = Storage_;
     using BitFieldType = BitField<Storage_, FieldType_, offset_, width_>;
 
-    /// Return given value in 'bit modification form', suitable to be aggregated.
+    /// Return given value in 'bit modification form', suitable to be
+    /// aggregated.
     static WordUpdate<Storage> value(FieldType t);
 
-    /// Return given value in 'bit modification form', suitable to be aggregated.
+    /// Return given value in 'bit modification form', suitable to be
+    /// aggregated.
     template <FieldType_ f>
     static WordUpdate<Storage> value()
     {
-        const Storage toSet = static_cast<Storage>(static_cast<int>(f) << offset);
-        const Storage toClear = static_cast<Storage>(((1 << width) - 1) << offset) & ~toSet;
+        const Storage toSet =
+            static_cast<Storage>(static_cast<int>(f) << offset);
+        const Storage toClear =
+            static_cast<Storage>(((1 << width) - 1) << offset) & ~toSet;
 
         return WordUpdate<Storage_>(toClear, toSet);
     }
@@ -548,8 +555,9 @@ struct WriteImplSpecialize1Bit
     static void write(typename BitField::Storage& s)
     {
         using Storage = typename BitField::Storage;
-        WriteImplSpecializeSetClear<Storage, bitFieldClearBits<BitField, value>(),
-                                    encodeBitField<BitField, value>()>::write(s);
+        WriteImplSpecializeSetClear<
+            Storage, bitFieldClearBits<BitField, value>(),
+            encodeBitField<BitField, value>()>::write(s);
     }
 };
 
@@ -586,7 +594,8 @@ void
 write(typename BitField::Storage& s, typename BitField::FieldType value)
 {
     using Storage = typename BitField::Storage;
-    modifyBits<Storage>(s, bitFieldMask<BitField>(), encodeBitField<BitField>(value));
+    modifyBits<Storage>(s, bitFieldMask<BitField>(),
+                        encodeBitField<BitField>(value));
 }
 
 // Write a value to a bitfield.
@@ -648,4 +657,4 @@ clear()
 {
     return BitField::Field::clear();
 }
-}
+} // namespace bitops

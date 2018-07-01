@@ -182,9 +182,7 @@ class Callback
     }
 
   private:
-    Callback(CB cb, void* ptr) : m_cb(cb), m_ptr(ptr)
-    {
-    }
+    Callback(CB cb, void* ptr) : m_cb(cb), m_ptr(ptr) {}
     CB m_cb;
     void* m_ptr;
 };
@@ -231,8 +229,8 @@ Callback::doFunctor(void* o, int val)
  * where 'obj' is of type 'SomeClass'.
  */
 #define MAKE_MEMBER_CB(objType, memFkn, object) \
-    \
-(Callback::make<objType, &memFkn>(object))
+                                                \
+    (Callback::make<objType, &memFkn>(object))
 
 /**
  * Helper macro to create Callbacks for calling a free function
@@ -244,8 +242,6 @@ Callback::doFunctor(void* o, int val)
  * where 'ptr' is a pointer to some type T and fkn a free
  * function with signature 'void (*)(T*, int);
  */
-#define MAKE_FREE_CB(ptr_type, fkn, ptr) \
-    \
-(Callback::make<ptr_type*, fkn>(ptr))
+#define MAKE_FREE_CB(ptr_type, fkn, ptr) (Callback::make<ptr_type*, fkn>(ptr))
 
 #endif /* UTILITY_CALLBACK_H_ */

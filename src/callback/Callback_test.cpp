@@ -39,7 +39,7 @@ testDiff(int x)
 {
     testVar -= x;
 }
-}
+} // namespace
 void
 testFreeFunction()
 {
@@ -66,9 +66,7 @@ testFreeFunction()
 
 struct TestObj
 {
-    TestObj() : m_val(3)
-    {
-    }
+    TestObj() : m_val(3) {}
     int m_val;
 
     void add(int x)

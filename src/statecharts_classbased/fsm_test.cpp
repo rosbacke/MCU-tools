@@ -33,9 +33,7 @@ class TestEvent
         testEvent3,
     };
 
-    explicit TestEvent(TestEventId id) : m_id(id)
-    {
-    }
+    explicit TestEvent(TestEventId id) : m_id(id) {}
     TestEventId m_id;
 };
 
@@ -153,9 +151,7 @@ class MyStateBase : public StateBase<TestFsmDescription, id>
     // Each state will receive an argument pack when the state is entered
     // (constructed)
     // This needs to be passed on to the base class.
-    MyStateBase(StateArgs& args) : StateBase<TestFsmDescription, id>(args)
-    {
-    }
+    MyStateBase(StateArgs& args) : StateBase<TestFsmDescription, id>(args) {}
 
     // Common support functions for states can be set up here.
     int getFsmData()

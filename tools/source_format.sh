@@ -9,4 +9,4 @@ SCRIPTPATH=`dirname $SCRIPT`
 cd ${SCRIPTPATH}/../src
 SRC_CPP=`find -iname '*.cpp'`
 SRC_H=`find -iname '*.h'`
-clang-format-3.8 -i ${SRC_CPP} ${SRC_H}
+clang-format-6.0 -i ${SRC_CPP} ${SRC_H}

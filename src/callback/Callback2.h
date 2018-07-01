@@ -236,9 +236,7 @@ class Callback2<R(Args...)>
 
   private:
     // Create ordinary free function pointer callback.
-    Callback2(CB cb, void* ptr) : m_cb(cb), m_ptr(ptr)
-    {
-    }
+    Callback2(CB cb, void* ptr) : m_cb(cb), m_ptr(ptr) {}
 
     CB m_cb;
     void* m_ptr;
@@ -257,10 +255,10 @@ class Callback2<R(Args...)>
  * @param memFkn Full name of the member function including class name.
  * @object object which the member function should be called on.
  */
-#define MAKE_MEMBER_CB2(fknType, memFkn, object)                         \
-    \
-(Callback2<fknType>::make<std::remove_reference<decltype(object)>::type, \
-                          &memFkn>(object))
+#define MAKE_MEMBER_CB2(fknType, memFkn, object)                             \
+                                                                             \
+    (Callback2<fknType>::make<std::remove_reference<decltype(object)>::type, \
+                              &memFkn>(object))
 
 /**
  * Helper macro to create Callbacks for calling a free function
@@ -278,9 +276,9 @@ class Callback2<R(Args...)>
  * @object Pointer to be supplied as first argument to function.
  *
  */
-#define MAKE_FREE_CB2(fknType, fkn, ptr)                                    \
-    \
-(Callback2<fknType>::make<std::remove_reference<decltype(ptr)>::type, fkn>( \
-        ptr))
+#define MAKE_FREE_CB2(fknType, fkn, ptr)                                  \
+                                                                          \
+    (Callback2<fknType>::make<std::remove_reference<decltype(ptr)>::type, \
+                              fkn>(ptr))
 
 #endif /* UTILITY_CALLBACK_H_ */

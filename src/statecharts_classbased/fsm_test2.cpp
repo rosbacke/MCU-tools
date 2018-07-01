@@ -122,9 +122,7 @@ class UserBase : public StateBase<UserFsmDesc, id>
     // Each state will receive an argument pack when the state is entered
     // (constructed)
     // This needs to be passed on to the base class.
-    UserBase(StateArgs& args) : StateBase<UserFsmDesc, id>(args)
-    {
-    }
+    UserBase(StateArgs& args) : StateBase<UserFsmDesc, id>(args) {}
 };
 
 // Second user state class.
@@ -297,4 +295,4 @@ TEST(StateChart, test_event_count1)
     EXPECT_EQ(fsm.currentStateId(), UserFsm::StateId::state1);
     fsm.td.equal(0, 2, 3);
 }
-}
+} // namespace
