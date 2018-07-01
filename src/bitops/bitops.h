@@ -26,6 +26,34 @@ bitWidth()
     return 8 * sizeof(Storage);
 }
 
+
+// Given value and bitwidth size, return lowest set bit;
+template<typename Storage>
+constexpr int lowestSetBit(Storage value, int size)
+{
+	if (size == 1)
+		return 0;
+	int halfSize = size / 2;
+	int mask = (1 << halfSize) - 1;
+	if (value & mask)
+		return lowestSetBit(value, halfSize);
+	else
+		return halfSize + lowestSetBit(value >> halfSize, halfSize);
+}
+
+
+/**
+ * Return the lowest bit position that contains a '1'.
+ * If none is set, return INT_MAX;
+ */
+template<typename Storage>
+int m2b(Storage mask)
+{
+	if (mask)
+		return lowestSetBit<Storage>(mask, bitWidth<Storage>());
+	return INT_MAX;
+}
+
 /**
  * Set a bit in an integral type.
  *
