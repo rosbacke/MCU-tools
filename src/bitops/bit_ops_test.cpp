@@ -9,31 +9,28 @@
 
 #include <gtest/gtest.h>
 
+using bitops::WordUpdate;
 using bitops::bitFieldMask;
 using bitops::bitWidth;
 using bitops::clearBit;
 using bitops::clearBits;
 using bitops::decodeBitField;
 using bitops::encodeBitField;
+using bitops::m2b;
 using bitops::modifyBits;
 using bitops::resize_cast;
 using bitops::setBit;
 using bitops::setBits;
-using bitops::WordUpdate;
-using bitops::m2b;
 // using bitops::encodeBitFieldTyped;
 // using bitops::decodeBitFieldTyped;
 
-
-
-TEST(bitops,mask2bitNo)
+TEST(bitops, mask2bitNo)
 {
-	EXPECT_EQ(m2b(0x10), 4);
-	EXPECT_EQ(m2b(uint8_t(0x80)), 7);
-	EXPECT_EQ(m2b(uint64_t(1ll << 63)), 63);
-	EXPECT_EQ(m2b(0), INT_MAX);
+    EXPECT_EQ(m2b(0x10), 4);
+    EXPECT_EQ(m2b(uint8_t(0x80)), 7);
+    EXPECT_EQ(m2b(uint64_t(1ll << 63)), 63);
+    EXPECT_EQ(m2b(0), INT_MAX);
 }
-
 
 TEST(bitops, setBit1)
 {
