@@ -17,10 +17,11 @@ using bitops::clearBits;
 using bitops::decodeBitField;
 using bitops::encodeBitField;
 using bitops::m2b;
-using bitops::modifyBits;
 using bitops::resize_cast;
 using bitops::setBit;
 using bitops::setBits;
+using bitops::updateBits;
+using bitops::WordUpdate;
 // using bitops::encodeBitFieldTyped;
 // using bitops::decodeBitFieldTyped;
 
@@ -92,14 +93,14 @@ TEST(bitops, clearBits)
     EXPECT_EQ(t2, 0xf0f000u);
 }
 
-TEST(bitops, modifyBits)
+TEST(bitops, updateBits)
 {
     uint32_t t = 0xf0f0f0f0;
-    modifyBits<uint32_t, 0xff0000ff, 0x0ff00ff0>(t);
+    updateBits<uint32_t, 0xff0000ff, 0x0ff00ff0>(t);
     EXPECT_EQ(t, 0x0ff0fff0u);
 
     uint32_t t2 = 0xf0f0f0f0;
-    modifyBits(t2, 0xff0000ffu, 0x0ff00ff0u);
+    updateBits(t2, 0xff0000ffu, 0x0ff00ff0u);
     EXPECT_EQ(t2, 0x0ff0fff0u);
 }
 

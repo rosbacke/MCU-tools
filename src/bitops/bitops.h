@@ -59,7 +59,7 @@ m2b(Storage mask)
  *
  * @param Storage Integral type to set a bit in.
  * @param bitNo bit number to set to '1'.
- * @param val Reference to value to modify.
+ * @param val Reference to value to update.
  */
 template <typename Storage, int bitNo>
 void
@@ -73,7 +73,7 @@ setBit(Storage& val)
  * Set a bit in an integral type.
  *
  * @param Storage Integral type to set a bit in.
- * @param val Reference to value to modify.
+ * @param val Reference to value to update.
  * @param bitNo bit number to set to '1'.
  */
 template <typename Storage>
@@ -88,7 +88,7 @@ setBit(Storage& val, int bitNo)
  *
  * @param Storage Integral type to set a bit in.
  * @param bitNo bit number to set to '1'.
- * @param val Reference to value to modify.
+ * @param val Reference to value to update.
  */
 template <typename Storage, int bitNo>
 void
@@ -102,7 +102,7 @@ clearBit(Storage& val)
  * Clear a bit in an integral type.
  *
  * @param Storage Integral type to set a bit in.
- * @param val Reference to value to modify.
+ * @param val Reference to value to update.
  * @param bitNo bit number to set to '1'.
  */
 template <typename Storage>
@@ -117,7 +117,7 @@ clearBit(Storage& val, int bitNo)
  * Bits set to '1' in setValue are set to '1' in val.
  *
  * @param Storage Integral type to set a bit in.
- * @param val Reference to value to modify.
+ * @param val Reference to value to update.
  * @param setValue Bitmask with bits to set.
  */
 template <typename Storage, Storage setValue>
@@ -132,7 +132,7 @@ setBits(Storage& val)
  * Bits set to '1' in setValue are set to '1' in val.
  *
  * @param Storage Integral type to set a bit in.
- * @param val Reference to value to modify.
+ * @param val Reference to value to update.
  * @param setValue Bitmask with bits to set.
  */
 template <typename Storage>
@@ -147,7 +147,7 @@ setBits(Storage& val, const Storage& setValue)
  * Bits set to '1' in clearValue are cleared to '0' in val.
  *
  * @param Storage Integral type to set a bit in.
- * @param val Reference to value to modify.
+ * @param val Reference to value to update.
  * @param clearValue Bitmask with bits to set.
  */
 template <typename Storage, Storage clearValue>
@@ -162,7 +162,7 @@ clearBits(Storage& val)
  * Bits set to '1' in clearValue are cleared to '0' in val.
  *
  * @param Storage Integral type to set a bit in.
- * @param val Reference to value to modify.
+ * @param val Reference to value to update.
  * @param clearValue Bitmask with bits to set.
  */
 template <typename Storage>
@@ -171,9 +171,6 @@ clearBits(Storage& val, Storage clearValue)
 {
     val &= ~clearValue;
 }
-
-template <class Store2>
-struct resize_cast;
 
 /**
  * Structure for collecting bit clear and set operations.
@@ -203,10 +200,10 @@ struct WordUpdate
     // Create a new storage with a different width, preserving those
     // bits that remains. When casting to a smaller size, this is a
     // potentially destructive operation.
-    template <class Store2>
-    WordUpdate<Store2> resize_cast() const
+    template <class DestStore>
+    WordUpdate<DestStore> resize_cast() const
     {
-        Store2 dummy;
+        DestStore dummy;
         return makeResize(*this, dummy);
     }
 
@@ -234,7 +231,7 @@ struct WordUpdate
         return *this;
     }
 
-    // When applying the WordUpdate, Clear all bits == 1 in bitMask, to 0.
+    // When applying the WordUpdate, Clear, all bits == 1 in bitMask, to 0.
     WordUpdate& clearBits(const Storage& bitMask)
     {
         bitops::clearBits(toSet, bitMask);
@@ -242,19 +239,14 @@ struct WordUpdate
         return *this;
     }
 
-    WordUpdate(const bitops::resize_cast<Storage>& rc)
-        : toClear(rc.wu_new.toClear), toSet(rc.wu_new.toSet)
-    {
-    }
-
     // Helper function to perform resize operation.
-    template <class Store2>
-    static WordUpdate<Store2> makeResize(const WordUpdate<Storage>& wuFrom,
-                                         Store2 dummy)
+    template <class DestStore>
+    static WordUpdate<DestStore> makeResize(const WordUpdate<Storage>& wuFrom,
+                                            DestStore dummy)
     {
-        WordUpdate<Store2> wu;
-        wu.toClear = static_cast<Store2>(wuFrom.toClear);
-        wu.toSet = static_cast<Store2>(wuFrom.toSet);
+        WordUpdate<DestStore> wu;
+        wu.toClear = static_cast<DestStore>(wuFrom.toClear);
+        wu.toSet = static_cast<DestStore>(wuFrom.toSet);
         return wu;
     }
 };
@@ -263,13 +255,13 @@ struct WordUpdate
 // Need class/function object to fix type deduction.
 // Need inheritance to let this class be part of operator resolution for
 // operator %, %=.
-template <class Store2>
-struct resize_cast : public WordUpdate<Store2>
+template <class DestStore>
+struct resize_cast : public WordUpdate<DestStore>
 {
     template <typename Storage>
     explicit resize_cast(const WordUpdate<Storage>& wu)
-        : WordUpdate<Store2>(
-              WordUpdate<Storage>::makeResize(wu, static_cast<Store2>(0)))
+        : WordUpdate<DestStore>(
+              WordUpdate<Storage>::makeResize(wu, static_cast<DestStore>(0)))
     {
     }
 };
@@ -346,12 +338,12 @@ operator%=(volatile Storage& lhs, const WordUpdate<Storage>& rhs)
 }
 
 /**
- * Modify a number of bits.
+ * update a number of bits.
  * First perform clear operation then set operation.
  */
 template <typename Storage, Storage clearValue, Storage setValue>
 void
-modifyBits(Storage& val)
+updateBits(Storage& val)
 {
     clearBits<Storage, clearValue>(val);
     setBits<Storage, setValue>(val);
@@ -359,7 +351,7 @@ modifyBits(Storage& val)
 
 template <typename Storage>
 void
-modifyBits(Storage& val, Storage clearValue, Storage setValue)
+updateBits(Storage& val, Storage clearValue, Storage setValue)
 {
     clearBits<Storage>(val, clearValue);
     setBits<Storage>(val, setValue);
@@ -369,7 +361,7 @@ modifyBits(Storage& val, Storage clearValue, Storage setValue)
 // Variable bits.
 template <typename Storage, Storage clearValue>
 void
-modifyBitsSetField(Storage& val, Storage setValue)
+updateBitsSetField(Storage& val, Storage setValue)
 {
     clearBits<clearValue>(val);
     setBits(val, setValue);
@@ -554,7 +546,7 @@ struct WriteImplSpecializeSetClear
 {
     static void write(Storage& s)
     {
-        modifyBits<Storage, clearBits_, setBits_>(s);
+        updateBits<Storage, clearBits_, setBits_>(s);
     }
 };
 
@@ -622,7 +614,7 @@ void
 write(typename BitField::Storage& s, typename BitField::FieldType value)
 {
     using Storage = typename BitField::Storage;
-    modifyBits<Storage>(s, bitFieldMask<BitField>(),
+    updateBits<Storage>(s, bitFieldMask<BitField>(),
                         encodeBitField<BitField>(value));
 }
 
@@ -631,7 +623,7 @@ template <typename Storage>
 void
 write(Storage& s, const WordUpdate<Storage>& bm)
 {
-    modifyBits<Storage>(s, bm.toClear, bm.toSet);
+    updateBits<Storage>(s, bm.toClear, bm.toSet);
 }
 
 template <typename Storage>
@@ -639,7 +631,7 @@ void
 write(volatile Storage& s, const WordUpdate<Storage>& bm)
 {
     Storage t = s;
-    modifyBits<Storage>(t, bm.toClear, bm.toSet);
+    updateBits<Storage>(t, bm.toClear, bm.toSet);
     s = t;
 }
 
@@ -647,9 +639,11 @@ template <typename Storage>
 void
 write(volatile uint16_t& s, const WordUpdate<Storage>& bm)
 {
+    // To avoid degenerate gcc code generation. Cast to 32 bit
+    // will not generate unneeded instructions on ARM.
     auto ptr = reinterpret_cast<volatile uint32_t*>(&s);
     Storage t = *ptr;
-    modifyBits<Storage>(t, bm.toClear, bm.toSet);
+    updateBits<Storage>(t, bm.toClear, bm.toSet);
     *ptr = t;
 }
 
