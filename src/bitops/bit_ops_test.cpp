@@ -10,6 +10,7 @@
 #include <gtest/gtest.h>
 
 using bitops::WordUpdate;
+using bitops::WordUpdate;
 using bitops::bitFieldMask;
 using bitops::bitWidth;
 using bitops::clearBit;
@@ -21,7 +22,6 @@ using bitops::resize_cast;
 using bitops::setBit;
 using bitops::setBits;
 using bitops::updateBits;
-using bitops::WordUpdate;
 // using bitops::encodeBitFieldTyped;
 // using bitops::decodeBitFieldTyped;
 
