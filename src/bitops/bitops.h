@@ -41,6 +41,7 @@ setBit(Storage& val)
     val |= (1 << bitNo);
 }
 
+
 /**
  * Set a bit in an integral type.
  *
@@ -109,18 +110,18 @@ setBits(Storage& val)
  */
 template <typename Storage>
 void
-setBits(Storage& val, Storage setValue)
+setBits(Storage& val, const Storage& setValue)
 {
     val |= setValue;
 }
 
 /**
  * Clear a number of bits in an integral type.
- * Bits set to '1' in setValue are cleared to '0' in val.
+ * Bits set to '1' in clearValue are cleared to '0' in val.
  *
  * @param Storage Integral type to set a bit in.
  * @param val Reference to value to modify.
- * @param setValue Bitmask with bits to set.
+ * @param clearValue Bitmask with bits to set.
  */
 template <typename Storage, Storage clearValue>
 void
@@ -132,11 +133,11 @@ clearBits(Storage& val)
 
 /**
  * Clear a number of bits in an integral type.
- * Bits set to '1' in setValue are cleared to '0' in val.
+ * Bits set to '1' in clearValue are cleared to '0' in val.
  *
  * @param Storage Integral type to set a bit in.
  * @param val Reference to value to modify.
- * @param setValue Bitmask with bits to set.
+ * @param clearValue Bitmask with bits to set.
  */
 template <typename Storage>
 void
@@ -145,18 +146,20 @@ clearBits(Storage& val, Storage clearValue)
     val &= ~clearValue;
 }
 
+template<class Store2>
+struct resize_cast;
+
 /**
  * Structure for collecting bit clear and set operations.
  * Bits set to one indicate it should be modified.
  * The clear will be applied before the set.
  */
 template <class Storage>
-struct BitModifications
+struct WordUpdate
 {
-    BitModifications() = default;
-    BitModifications(Storage clear, Storage set) : toClear(clear), toSet(set)
-    {
-    }
+    WordUpdate() = default;
+    WordUpdate(Storage clear, Storage set) : toClear(clear), toSet(set)
+    {}
 
     /// Bits set to '1' are forced to 0 in the final write.
     Storage toClear = static_cast<Storage>(0);
@@ -166,23 +169,116 @@ struct BitModifications
 
     /// Merge 2 BitModification structures into 1. Bit set have priority
     /// over bit cleared.
-    static void apply(BitModifications& lhs, const BitModifications& rhs)
+    static void apply(WordUpdate& lhs, const WordUpdate& rhs)
     {
         lhs.toClear |= rhs.toClear;
         lhs.toSet |= rhs.toSet;
     }
+
+    // Create a new storage with a different width, preserving those
+    // bits that remains. When casting to a smaller size, this is a
+    // potentially destructive operation.
+    template<class Store2>
+    WordUpdate<Store2> resize_cast() const
+	{
+    	Store2 dummy;
+    	return makeResize(*this, dummy);
+	}
+
+    // When applying the WordUpdate, set bit 'bitNo'
+    WordUpdate& setBit(int bitNo)
+    {
+    	bitops::setBit(toSet, bitNo);
+    	bitops::clearBit(toClear, bitNo);
+    	return *this;
+    }
+
+    // When applying the WordUpdate, clear bit 'bitNo'
+    WordUpdate& clearBit(int bitNo)
+    {
+    	bitops::clearBit(toSet, bitNo);
+    	bitops::setBit(toClear, bitNo);
+    	return *this;
+    }
+
+    // When applying the WordUpdate, Set all bits == 1 in bitMask, to 1.
+    WordUpdate& setBits(const Storage& bitMask)
+    {
+    	bitops::setBits(toSet, bitMask);
+    	bitops::clearBits(toClear, bitMask);
+    	return *this;
+    }
+
+    // When applying the WordUpdate, Clear all bits == 1 in bitMask, to 0.
+    WordUpdate& clearBits(const Storage& bitMask)
+    {
+    	bitops::clearBits(toSet, bitMask);
+    	bitops::setBits(toClear, bitMask);
+    	return *this;
+    }
+
+    WordUpdate(const bitops::resize_cast<Storage>& rc)
+    : toClear(rc.wu_new.toClear), toSet(rc.wu_new.toSet) {}
+
+    // Helper function to perform resize operation.
+    template<class Store2>
+    static WordUpdate<Store2> makeResize(const WordUpdate<Storage>& wuFrom, Store2 dummy)
+	{
+    	WordUpdate<Store2> wu;
+    	wu.toClear = static_cast<Store2>(wuFrom.toClear);
+    	wu.toSet = static_cast<Store2>(wuFrom.toSet);
+    	return wu;
+	}
+};
+
+
+// Free function variant for WordUpdate rezise_cast.
+// Need class/function object to fix type deduction.
+// Need inheritance to let this class be part of operator resolution for operator %, %=.
+template<class Store2>
+struct resize_cast : public WordUpdate<Store2>
+{
+	template<typename Storage>
+	explicit resize_cast(const WordUpdate<Storage>& wu)
+	: WordUpdate<Store2>(WordUpdate<Storage>::makeResize(wu, static_cast<Store2>(0)))
+	  {
+	  }
 };
 
 /**
- * Merge 2 BitModifications structs, using the apply function.
+ * Apply a WordUpdate to a value of the relevant type.
+ */
+template<class Storage>
+void update(Storage& s, const WordUpdate<Storage>& wu)
+{
+	Storage t = s;
+	clearBits<Storage>(t, wu.toClear);
+	setBits<Storage>(t, wu.toSet);
+	s = t;
+}
+
+/**
+ * Apply a WordUpdate to a volatile reference the relevant type.
+ */
+template<class Storage>
+void update(volatile Storage& s, const WordUpdate<Storage>& wu)
+{
+	Storage t = s;
+	clearBits<Storage>(t, wu.toClear);
+	setBits<Storage>(t, wu.toSet);
+	s = t;
+}
+
+/**
+ * Merge 2 WordUpdate structs, using the apply function.
  * Bit sets have priority over bit clear.
  */
 template <class Storage>
-BitModifications<Storage>
-operator%(const BitModifications<Storage>& lhs, const BitModifications<Storage>& rhs)
+WordUpdate<Storage>
+operator%(const WordUpdate<Storage>& lhs, const WordUpdate<Storage>& rhs)
 {
-    BitModifications<Storage> bm = lhs;
-    BitModifications<Storage>::apply(bm, rhs);
+    WordUpdate<Storage> bm = lhs;
+    WordUpdate<Storage>::apply(bm, rhs);
     return bm;
 }
 
@@ -196,10 +292,9 @@ operator%(const BitModifications<Storage>& lhs, const BitModifications<Storage>&
  */
 template <class Storage>
 Storage&
-operator%=(Storage& lhs, const BitModifications<Storage>& rhs)
+operator%=(Storage& lhs, const WordUpdate<Storage>& rhs)
 {
-    clearBits<Storage>(lhs, rhs.toClear);
-    setBits<Storage>(lhs, rhs.toSet);
+	update<Storage>(lhs, rhs);
     return lhs;
 }
 
@@ -212,13 +307,10 @@ operator%=(Storage& lhs, const BitModifications<Storage>& rhs)
  * @rhs Describe which bits to clear and set.
  */
 template <class Storage>
-Storage&
-operator%=(volatile Storage& lhs, const BitModifications<Storage>& rhs)
+volatile Storage&
+operator%=(volatile Storage& lhs, const WordUpdate<Storage>& rhs)
 {
-	Storage t = lhs;
-    clearBits<Storage>(t, rhs.toClear);
-    setBits<Storage>(t, rhs.toSet);
-    lhs = t;
+	update<Storage>(lhs, rhs);
     return lhs;
 }
 
@@ -286,23 +378,23 @@ class BitField
     using BitFieldType = BitField<Storage_, FieldType_, offset_, width_>;
 
     /// Return given value in 'bit modification form', suitable to be aggregated.
-    static BitModifications<Storage> value(FieldType t);
+    static WordUpdate<Storage> value(FieldType t);
 
     /// Return given value in 'bit modification form', suitable to be aggregated.
     template <FieldType_ f>
-    static BitModifications<Storage> value()
+    static WordUpdate<Storage> value()
     {
         const Storage toSet = static_cast<Storage>(static_cast<int>(f) << offset);
         const Storage toClear = static_cast<Storage>(((1 << width) - 1) << offset) & ~toSet;
 
-        return BitModifications<Storage_>(toClear, toSet);
+        return WordUpdate<Storage_>(toClear, toSet);
     }
 
     /// Return modification to set all bits in field.
-    static BitModifications<Storage> set();
+    static WordUpdate<Storage> set();
 
     /// Return modification to clear all bits in field.
-    static BitModifications<Storage> clear();
+    static WordUpdate<Storage> clear();
 };
 
 /**
@@ -400,26 +492,26 @@ encodeBitField()
 }
 
 template <typename Storage_, typename FieldType_, int offset_, int width_>
-BitModifications<Storage_>
+WordUpdate<Storage_>
 BitField<Storage_, FieldType_, offset_, width_>::value(FieldType_ t)
 {
     const Storage toClear = bitFieldMask<BitField>();
     const Storage toSet = encodeBitField<BitField>(t);
-    return BitModifications<Storage_>(toClear, toSet);
+    return WordUpdate<Storage_>(toClear, toSet);
 }
 
 template <typename Storage_, typename FieldType_, int offset_, int width_>
-BitModifications<Storage_>
+WordUpdate<Storage_>
 BitField<Storage_, FieldType_, offset_, width_>::set()
 {
-    return BitModifications<Storage_>(0u, bitFieldMask<BitField>());
+    return WordUpdate<Storage_>(0u, bitFieldMask<BitField>());
 }
 
 template <typename Storage_, typename FieldType_, int offset_, int width_>
-BitModifications<Storage_>
+WordUpdate<Storage_>
 BitField<Storage_, FieldType_, offset_, width_>::clear()
 {
-    return BitModifications<Storage_>(bitFieldMask<BitField>(), 0u);
+    return WordUpdate<Storage_>(bitFieldMask<BitField>(), 0u);
 }
 
 template <typename Storage, uint32_t clearBits_, uint32_t setBits_>
@@ -500,14 +592,14 @@ write(typename BitField::Storage& s, typename BitField::FieldType value)
 // Write a value to a bitfield.
 template <typename Storage>
 void
-write(Storage& s, const BitModifications<Storage>& bm)
+write(Storage& s, const WordUpdate<Storage>& bm)
 {
     modifyBits<Storage>(s, bm.toClear, bm.toSet);
 }
 
 template <typename Storage>
 void
-write(volatile Storage& s, const BitModifications<Storage>& bm)
+write(volatile Storage& s, const WordUpdate<Storage>& bm)
 {
     Storage t = s;
     modifyBits<Storage>(t, bm.toClear, bm.toSet);
@@ -516,7 +608,7 @@ write(volatile Storage& s, const BitModifications<Storage>& bm)
 
 template <typename Storage>
 void
-write(volatile uint16_t& s, const BitModifications<Storage>& bm)
+write(volatile uint16_t& s, const WordUpdate<Storage>& bm)
 {
     auto ptr = reinterpret_cast<volatile uint32_t*>(&s);
     Storage t = *ptr;
@@ -537,21 +629,21 @@ read(typename BitField::Storage bits)
 }
 
 template <typename BitField>
-BitModifications<typename BitField::Register::RegStorage>
+WordUpdate<typename BitField::Register::RegStorage>
 value(typename BitField::Field::FieldType t)
 {
     return BitField::Field::value(t);
 }
 
 template <typename BitField>
-BitModifications<typename BitField::Register::RegStorage>
+WordUpdate<typename BitField::Register::RegStorage>
 set()
 {
     return BitField::Field::set();
 }
 
 template <typename BitField>
-BitModifications<typename BitField::Register::RegStorage>
+WordUpdate<typename BitField::Register::RegStorage>
 clear()
 {
     return BitField::Field::clear();

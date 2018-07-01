@@ -15,22 +15,35 @@ using bitops::clearBit;
 using bitops::clearBits;
 using bitops::modifyBits;
 using bitops::bitWidth;
+using bitops::WordUpdate;
 using bitops::bitFieldMask;
 using bitops::encodeBitField;
 using bitops::decodeBitField;
+using bitops::resize_cast;
 // using bitops::encodeBitFieldTyped;
 // using bitops::decodeBitFieldTyped;
 
-TEST(bitops, setBit)
+TEST(bitops, setBit1)
 {
     uint32_t t = 0xf0f0f0;
+
     setBit<uint32_t, 0>(t);
     EXPECT_EQ(t, 0xf0f0f1u);
     setBit<uint32_t, 17>(t);
     EXPECT_EQ(t, 0xf2f0f1u);
 }
 
-TEST(bitops, clearBit)
+TEST(bitops, setBit2)
+{
+    uint32_t t = 0xf0f0f0;
+
+    setBit(t, 0);
+    EXPECT_EQ(t, 0xf0f0f1u);
+    setBit(t, 17);
+    EXPECT_EQ(t, 0xf2f0f1u);
+}
+
+TEST(bitops, clearBit1)
 {
     uint32_t t = 0xf0f0f0;
     clearBit<uint32_t, 5>(t);
@@ -39,11 +52,24 @@ TEST(bitops, clearBit)
     EXPECT_EQ(t, 0xe0f0d0u);
 }
 
+TEST(bitops, clearBit2)
+{
+    uint32_t t = 0xf0f0f0;
+    clearBit(t, 5);
+    EXPECT_EQ(t, 0xf0f0d0u);
+    clearBit(t, 20);
+    EXPECT_EQ(t, 0xe0f0d0u);
+}
+
 TEST(bitops, setBits)
 {
     uint32_t t = 0xf0f0f0;
     setBits<uint32_t, 0xf0000ff>(t);
     EXPECT_EQ(t, 0xff0f0ffu);
+
+    uint32_t t2 = 0xf0f0f0;
+    setBits(t2, 0xf0000ffu);
+    EXPECT_EQ(t2, 0xff0f0ffu);
 }
 
 TEST(bitops, clearBits)
@@ -51,6 +77,10 @@ TEST(bitops, clearBits)
     uint32_t t = 0xf0f0f0;
     clearBits<uint32_t, 0xf0000ff>(t);
     EXPECT_EQ(t, 0xf0f000u);
+
+    uint32_t t2 = 0xf0f0f0;
+    clearBits(t2, 0xf0000ffu);
+    EXPECT_EQ(t2, 0xf0f000u);
 }
 
 TEST(bitops, modifyBits)
@@ -58,6 +88,10 @@ TEST(bitops, modifyBits)
     uint32_t t = 0xf0f0f0f0;
     modifyBits<uint32_t, 0xff0000ff, 0x0ff00ff0>(t);
     EXPECT_EQ(t, 0x0ff0fff0u);
+
+    uint32_t t2 = 0xf0f0f0f0;
+    modifyBits(t2, 0xff0000ffu, 0x0ff00ff0u);
+    EXPECT_EQ(t2, 0x0ff0fff0u);
 }
 
 TEST(bitops, bitWidth)
@@ -65,6 +99,76 @@ TEST(bitops, bitWidth)
     EXPECT_EQ(bitWidth<uint16_t>(), 16);
     EXPECT_EQ(bitWidth<uint32_t>(), 32);
 }
+
+TEST(bitops, WordUpdate)
+{
+	auto wu = WordUpdate<uint32_t>();
+    EXPECT_EQ(wu.toClear, 0);
+    EXPECT_EQ(wu.toSet, 0);
+
+    uint32_t val = 0x5555aaaa;
+    update(val, wu);
+    EXPECT_EQ(val, 0x5555aaaa);
+
+    wu.setBit(31);
+    wu.setBit(0);
+    wu.clearBit(30);
+    wu.clearBit(1);
+
+    update(val, wu);
+    EXPECT_EQ(val, 0x9555aaa9);
+}
+
+TEST(bitops, WordUpdate2)
+{
+	auto wu = WordUpdate<uint32_t>().setBits(0xff000000).clearBits(0xff);
+
+    uint32_t val = 0x5555aaaa;
+    update(val, wu);
+    EXPECT_EQ(val, 0xff55aa00);
+
+    wu.setBits(0xf).clearBits(0xf00);
+    uint32_t val2 = 0x5555aaaa;
+    update(val2, wu);
+    EXPECT_EQ(val2, 0xff55a00f);
+
+	auto wu2 = WordUpdate<uint8_t>().setBit(1).clearBit(4);
+	uint8_t val3 = '\x55';
+	update(val3, wu2);
+    EXPECT_EQ(val3, 0x47);
+}
+
+TEST(bitops, WordUpdate_operators)
+{
+	WordUpdate<uint32_t> wu;
+    EXPECT_EQ(wu.toClear, 0);
+    EXPECT_EQ(wu.toSet, 0);
+
+    uint32_t val = 0x5555aaaa;
+    val %= wu;
+    EXPECT_EQ(val, 0x5555aaaa);
+
+    wu.setBit(31);
+    wu.clearBit(30);
+
+    WordUpdate<uint32_t> wu2;
+    wu2.setBit(0);
+    wu2.clearBit(1);
+
+    val %= wu % wu2;
+
+    EXPECT_EQ(val, 0x9555aaa9);
+
+    uint16_t val2 = 0x4466;
+    val2 %= wu2.resize_cast<uint16_t>();
+    EXPECT_EQ(val2, 0x4465);
+
+    uint16_t val3 = 0x4466;
+    val3 %= resize_cast<uint16_t>(wu2);
+    EXPECT_EQ(val3, 0x4465);
+
+}
+
 
 TEST(bitops, bitFieldMask)
 {
