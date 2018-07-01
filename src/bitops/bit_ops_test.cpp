@@ -17,7 +17,8 @@ using bitops::clearBit;
 using bitops::clearBits;
 using bitops::decodeBitField;
 using bitops::encodeBitField;
-using bitops::m2b;
+using bitops::maskEndBit;
+using bitops::maskLowBit;
 using bitops::resize_cast;
 using bitops::setBit;
 using bitops::setBits;
@@ -27,10 +28,17 @@ using bitops::updateBits;
 
 TEST(bitops, mask2bitNo)
 {
-    EXPECT_EQ(m2b(0x10), 4);
-    EXPECT_EQ(m2b(uint8_t(0x80)), 7);
-    EXPECT_EQ(m2b(uint64_t(1ll << 63)), 63);
-    EXPECT_EQ(m2b(0), INT_MAX);
+    EXPECT_EQ(maskLowBit(0x10), 4);
+    EXPECT_EQ(maskLowBit(uint8_t(0x80)), 7);
+    EXPECT_EQ(maskLowBit(uint64_t(1ll << 63)), 63);
+    EXPECT_EQ(maskLowBit(0), INT_MAX);
+
+    EXPECT_EQ(maskEndBit(0x10), 5);
+    EXPECT_EQ(maskEndBit(0), 0);
+    EXPECT_EQ(maskEndBit(uint8_t(0x80)), 8);
+    EXPECT_EQ(maskEndBit(uint64_t(1ll << 63)), 64);
+    EXPECT_EQ(maskEndBit(0), 0);
+    EXPECT_EQ(maskEndBit(0xff0), 12);
 }
 
 TEST(bitops, setBit1)

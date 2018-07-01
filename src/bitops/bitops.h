@@ -2,6 +2,7 @@
 
 #include <climits>
 #include <cstdint>
+#include <limits>
 
 /**
  * Bitops. Collects a number of operations to manipulate bit fields
@@ -26,13 +27,17 @@ bitWidth()
     return 8 * sizeof(Storage);
 }
 
+namespace details
+{
 // Given value and bitwidth size, return lowest set bit;
 template <typename Storage>
 constexpr int
 lowestSetBit(Storage value, int size)
 {
     if (size == 1)
-        return 0;
+        return value & 1 ? 0
+                         : (std::numeric_limits<int>::max() -
+                            bitWidth<Storage>() + 1);
     int halfSize = size / 2;
     int mask = (1 << halfSize) - 1;
     if (value & mask)
@@ -41,17 +46,60 @@ lowestSetBit(Storage value, int size)
         return halfSize + lowestSetBit(value >> halfSize, halfSize);
 }
 
+// Given value and bitwidth size, return lowest clear bit, which do not have a
+// set bit above it.
+template <typename Storage>
+constexpr int
+lowestClearBit(Storage value, int size)
+{
+    if (size == 1)
+        return value & 1;
+
+    int halfSize = size / 2;
+    int mask = ~((1 << halfSize) - 1);
+    if (value & mask)
+        return halfSize + lowestClearBit(value >> halfSize, halfSize);
+    else
+        return lowestClearBit(value, halfSize);
+}
+}
+
 /**
- * Return the lowest bit position that contains a '1'.
+ * mask2bitno.
+ * Return the lowest bit position that contains a '1' in param mask.
  * If none is set, return INT_MAX;
  */
 template <typename Storage>
 int
-m2b(Storage mask)
+maskLowBit(Storage mask)
 {
-    if (mask)
-        return lowestSetBit<Storage>(mask, bitWidth<Storage>());
-    return INT_MAX;
+    return details::lowestSetBit<Storage>(mask, bitWidth<Storage>());
+}
+
+template <typename Storage, Storage mask>
+int
+maskLowBit()
+{
+    return details::lowestSetBit<Storage>(mask, bitWidth<Storage>());
+}
+
+/**
+ * maskEndBit.
+ * Return one beyond highest set bit in the bitmask.
+ * the lowest bit position that contains a '1' in param mask.
+ */
+template <typename Storage>
+int
+maskEndBit(Storage mask)
+{
+    return details::lowestClearBit<Storage>(mask, bitWidth<Storage>());
+}
+
+template <typename Storage, Storage mask>
+int
+maskEndBit()
+{
+    return details::lowestClearBit<Storage>(mask, bitWidth<Storage>());
 }
 
 /**
