@@ -65,19 +65,19 @@ lowestClearBit(Storage value, int size)
 }
 
 /**
- * mask2bitno.
+ * maskLowBit
  * Return the lowest bit position that contains a '1' in param mask.
  * If none is set, return INT_MAX;
  */
 template <typename Storage>
-int
+constexpr int
 maskLowBit(Storage mask)
 {
     return details::lowestSetBit<Storage>(mask, bitWidth<Storage>());
 }
 
 template <typename Storage, Storage mask>
-int
+constexpr int
 maskLowBit()
 {
     return details::lowestSetBit<Storage>(mask, bitWidth<Storage>());
@@ -86,17 +86,16 @@ maskLowBit()
 /**
  * maskEndBit.
  * Return one beyond highest set bit in the bitmask.
- * the lowest bit position that contains a '1' in param mask.
  */
 template <typename Storage>
-int
+constexpr int
 maskEndBit(Storage mask)
 {
     return details::lowestClearBit<Storage>(mask, bitWidth<Storage>());
 }
 
 template <typename Storage, Storage mask>
-int
+constexpr int
 maskEndBit()
 {
     return details::lowestClearBit<Storage>(mask, bitWidth<Storage>());
@@ -110,7 +109,7 @@ maskEndBit()
  * @param val Reference to value to update.
  */
 template <typename Storage, int bitNo>
-void
+constexpr void
 setBit(Storage& val)
 {
     static_assert(bitNo < bitWidth<Storage>(), "");
@@ -125,7 +124,7 @@ setBit(Storage& val)
  * @param bitNo bit number to set to '1'.
  */
 template <typename Storage>
-void
+constexpr void
 setBit(Storage& val, int bitNo)
 {
     val |= (1 << bitNo);
@@ -139,7 +138,7 @@ setBit(Storage& val, int bitNo)
  * @param val Reference to value to update.
  */
 template <typename Storage, int bitNo>
-void
+constexpr void
 clearBit(Storage& val)
 {
     static_assert(bitNo < bitWidth<Storage>(), "");
@@ -154,7 +153,7 @@ clearBit(Storage& val)
  * @param bitNo bit number to set to '1'.
  */
 template <typename Storage>
-void
+constexpr void
 clearBit(Storage& val, int bitNo)
 {
     val &= ~static_cast<Storage>(1 << bitNo);
@@ -169,10 +168,18 @@ clearBit(Storage& val, int bitNo)
  * @param setValue Bitmask with bits to set.
  */
 template <typename Storage, Storage setValue>
-void
+constexpr void
 setBits(Storage& val)
 {
     val |= setValue;
+}
+
+template <typename Storage, Storage setValue>
+constexpr void
+setBits(volatile Storage& val)
+{
+    if (setValue)
+        val |= setValue;
 }
 
 /**
@@ -184,8 +191,15 @@ setBits(Storage& val)
  * @param setValue Bitmask with bits to set.
  */
 template <typename Storage>
-void
+constexpr void
 setBits(Storage& val, const Storage& setValue)
+{
+    val |= setValue;
+}
+
+template <typename Storage>
+constexpr void
+setBits(volatile Storage& val, const Storage& setValue)
 {
     val |= setValue;
 }
@@ -199,10 +213,18 @@ setBits(Storage& val, const Storage& setValue)
  * @param clearValue Bitmask with bits to set.
  */
 template <typename Storage, Storage clearValue>
-void
+constexpr void
 clearBits(Storage& val)
 {
     val &= ~clearValue;
+}
+
+template <typename Storage, Storage clearValue>
+constexpr void
+clearBits(volatile Storage& val)
+{
+    if (clearValue)
+        val &= ~clearValue;
 }
 
 /**
@@ -214,8 +236,15 @@ clearBits(Storage& val)
  * @param clearValue Bitmask with bits to set.
  */
 template <typename Storage>
-void
+constexpr void
 clearBits(Storage& val, Storage clearValue)
+{
+    val &= ~clearValue;
+}
+
+template <typename Storage>
+constexpr void
+clearBits(volatile Storage& val, Storage clearValue)
 {
     val &= ~clearValue;
 }
@@ -341,6 +370,26 @@ update(volatile Storage& s, const WordUpdate<Storage>& wu)
 }
 
 /**
+ * update a number of bits.
+ * First perform clear operation then set operation.
+ */
+template <typename Storage, Storage clearValue, Storage setValue>
+void
+update(Storage& val)
+{
+    clearBits<Storage, clearValue>(val);
+    setBits<Storage, setValue>(val);
+}
+
+template <typename Storage>
+void
+update(Storage& val, Storage clearValue, Storage setValue)
+{
+    clearBits<Storage>(val, clearValue);
+    setBits<Storage>(val, setValue);
+}
+
+/**
  * Merge 2 WordUpdate structs, using the apply function.
  * Bit sets have priority over bit clear.
  */
@@ -385,26 +434,6 @@ operator%=(volatile Storage& lhs, const WordUpdate<Storage>& rhs)
     return lhs;
 }
 
-/**
- * update a number of bits.
- * First perform clear operation then set operation.
- */
-template <typename Storage, Storage clearValue, Storage setValue>
-void
-updateBits(Storage& val)
-{
-    clearBits<Storage, clearValue>(val);
-    setBits<Storage, setValue>(val);
-}
-
-template <typename Storage>
-void
-updateBits(Storage& val, Storage clearValue, Storage setValue)
-{
-    clearBits<Storage>(val, clearValue);
-    setBits<Storage>(val, setValue);
-}
-
 // Common case, clearing a fixed field and then setting run time
 // Variable bits.
 template <typename Storage, Storage clearValue>
@@ -413,6 +442,77 @@ updateBitsSetField(Storage& val, Storage setValue)
 {
     clearBits<clearValue>(val);
     setBits(val, setValue);
+}
+
+/**
+ * Represent a range of bits within a storage unit. Used for
+ * specifying bits in a bit range.
+ * @param unsigned integral type acting as backing store for the range.
+ * @param lowBit_ index of the lowest bit position for the range.
+ * @param width_ Number of bits in the range.
+ */
+template <class Storage, int lowBit_, int width_>
+struct Range
+{
+#if 0
+	static constexpr int lowBit = lowBit_;
+	static constexpr int endBit = lowBit_ + width_;
+
+	static_assert(endBit <= bitWidth<Storage>(), "");
+
+	static constexpr int width = width_;
+	// Max value the range can store.
+	static constexpr Storage  maxValue = (1ull << width) - 1;
+#endif
+
+    static constexpr int lowBit()
+    {
+        return lowBit_;
+    }
+    static constexpr int endBit()
+    {
+        return lowBit_ + width_;
+    }
+    static_assert(endBit() <= bitWidth<Storage>(), "");
+
+    static constexpr int width()
+    {
+        return width_;
+    }
+    static constexpr Storage maxValue()
+    {
+        return (1ull << width()) - 1;
+    }
+
+    // Return a value suitable for masking the range in a store.
+    static constexpr Storage mask()
+    {
+        return static_cast<Storage>((1ull << width()) << lowBit());
+    }
+
+    // Return value shifted into the proper range position.
+    template <Storage value>
+    static constexpr Storage value2Storage()
+    {
+        static_assert(value <= maxValue, "");
+        return value << lowBit();
+    }
+    static constexpr Storage value2Storage(Storage value)
+    {
+        return value << lowBit();
+    }
+};
+
+/**
+ * Given an integral value that is a bitmask, calculate the appropriate range
+ * type.
+ */
+template <typename Storage, Storage bitMask>
+auto constexpr bitmask2Range()
+    -> Range<Storage, maskLowBit<Storage, bitMask>(),
+             maskEndBit<Storage, bitMask>() - maskLowBit<Storage, bitMask>()>
+{
+    return {};
 }
 
 /**
@@ -594,7 +694,7 @@ struct WriteImplSpecializeSetClear
 {
     static void write(Storage& s)
     {
-        updateBits<Storage, clearBits_, setBits_>(s);
+        update<Storage, clearBits_, setBits_>(s);
     }
 };
 
@@ -662,8 +762,8 @@ void
 write(typename BitField::Storage& s, typename BitField::FieldType value)
 {
     using Storage = typename BitField::Storage;
-    updateBits<Storage>(s, bitFieldMask<BitField>(),
-                        encodeBitField<BitField>(value));
+    update<Storage>(s, bitFieldMask<BitField>(),
+                    encodeBitField<BitField>(value));
 }
 
 // Write a value to a bitfield.
@@ -671,7 +771,7 @@ template <typename Storage>
 void
 write(Storage& s, const WordUpdate<Storage>& bm)
 {
-    updateBits<Storage>(s, bm.toClear, bm.toSet);
+    update<Storage>(s, bm.toClear, bm.toSet);
 }
 
 template <typename Storage>
@@ -679,7 +779,7 @@ void
 write(volatile Storage& s, const WordUpdate<Storage>& bm)
 {
     Storage t = s;
-    updateBits<Storage>(t, bm.toClear, bm.toSet);
+    update<Storage>(t, bm.toClear, bm.toSet);
     s = t;
 }
 
@@ -691,7 +791,7 @@ write(volatile uint16_t& s, const WordUpdate<Storage>& bm)
     // will not generate unneeded instructions on ARM.
     auto ptr = reinterpret_cast<volatile uint32_t*>(&s);
     Storage t = *ptr;
-    updateBits<Storage>(t, bm.toClear, bm.toSet);
+    update<Storage>(t, bm.toClear, bm.toSet);
     *ptr = t;
 }
 

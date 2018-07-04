@@ -22,7 +22,7 @@ using bitops::maskLowBit;
 using bitops::resize_cast;
 using bitops::setBit;
 using bitops::setBits;
-using bitops::updateBits;
+using bitops::update;
 // using bitops::encodeBitFieldTyped;
 // using bitops::decodeBitFieldTyped;
 
@@ -101,14 +101,14 @@ TEST(bitops, clearBits)
     EXPECT_EQ(t2, 0xf0f000u);
 }
 
-TEST(bitops, updateBits)
+TEST(bitops, update)
 {
     uint32_t t = 0xf0f0f0f0;
-    updateBits<uint32_t, 0xff0000ff, 0x0ff00ff0>(t);
+    update<uint32_t, 0xff0000ff, 0x0ff00ff0>(t);
     EXPECT_EQ(t, 0x0ff0fff0u);
 
     uint32_t t2 = 0xf0f0f0f0;
-    updateBits(t2, 0xff0000ffu, 0x0ff00ff0u);
+    update(t2, 0xff0000ffu, 0x0ff00ff0u);
     EXPECT_EQ(t2, 0x0ff0fff0u);
 }
 
@@ -291,6 +291,15 @@ TEST(bitops, test_clear_set_functions_of_bitfield)
     EXPECT_EQ(test5.toSet, 0x0u);
 
     EXPECT_TRUE(true);
+}
+
+TEST(Range, bitmask)
+{
+    auto constexpr t = bitops::bitmask2Range<uint32_t, 0x0007f800u>();
+    using rng = decltype(t);
+    EXPECT_EQ(rng::lowBit(), 11);
+    EXPECT_EQ(rng::width(), 8);
+    EXPECT_EQ(rng::endBit(), 19);
 }
 
 int
