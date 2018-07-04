@@ -293,6 +293,205 @@ TEST(bitops, test_clear_set_functions_of_bitfield)
     EXPECT_TRUE(true);
 }
 
+/**
+ * Helper array to set up constexpr arrays.
+ */
+template <typename T, std::size_t N>
+class array_result
+{
+    constexpr static std::size_t size_ = N;
+    T data_[N]{};
+
+  public:
+    constexpr std::size_t size() const
+    {
+        return N;
+    }
+    constexpr T& operator[](std::size_t n)
+    {
+        return data_[n];
+    }
+    constexpr const T& operator[](std::size_t n) const
+    {
+        return data_[n];
+    }
+    using iterator = T*;
+    constexpr iterator begin()
+    {
+        return &data_[0];
+    }
+    constexpr iterator end()
+    {
+        return &data_[N];
+    }
+};
+
+#define STM32F42_43xxx 1
+#include <stm32f4xx.h>
+
+// Our devices in the MCU.
+enum Dev_e
+{
+    rcc,
+    gpioa,
+    gpiob,
+    gpioc,
+    gpiod,
+    gpioe,
+    gpiof,
+    gpiog,
+    gpioh,
+    gpioi,
+    gpioj,
+    gpiok,
+
+    usart1,
+    usart2,
+    spi1,
+    spi2,
+    dev_endIndex
+};
+
+// Registers in the RCC
+enum RccChangesetIndex
+{
+    ci_ahb1,
+    ci_ahb2,
+    ci_ahb3,
+    ci_apb1,
+    ci_apb2,
+    ci_endIndex,
+};
+
+// Set of changes to apply to the RCC regs.
+struct RccChangeSet
+{
+    constexpr RccChangeSet() {}
+    uint32_t vals[ci_endIndex] = {};
+};
+
+struct DeviceEntry
+{
+    constexpr DeviceEntry() : reg(ci_endIndex), bitMask(0) {}
+    constexpr DeviceEntry(Dev_e dev, RccChangesetIndex reg, uint32_t bitMask)
+        : reg(reg), bitMask(bitMask)
+    {
+    }
+
+    RccChangesetIndex reg; // Which register is this device connected to.
+    uint32_t bitMask;      // Which bit control the device.
+};
+
+static constexpr auto
+calcDevTable() -> array_result<DeviceEntry, dev_endIndex>
+{
+    array_result<DeviceEntry, dev_endIndex> res;
+
+    res[rcc] = DeviceEntry(rcc, ci_endIndex, 0);
+    res[gpioa] = DeviceEntry(gpioa, ci_ahb1, RCC_AHB1ENR_GPIOAEN);
+    res[gpiob] = DeviceEntry(gpiob, ci_ahb1, RCC_AHB1ENR_GPIOBEN);
+    res[gpioc] = DeviceEntry(gpioc, ci_ahb1, RCC_AHB1ENR_GPIOCEN);
+    res[gpiod] = DeviceEntry(gpiod, ci_ahb1, RCC_AHB1ENR_GPIODEN);
+    res[gpioe] = DeviceEntry(gpioe, ci_ahb1, RCC_AHB1ENR_GPIOEEN);
+    res[gpiof] = DeviceEntry(gpiof, ci_ahb1, RCC_AHB1ENR_GPIOFEN);
+    res[gpiog] = DeviceEntry(gpiog, ci_ahb1, RCC_AHB1ENR_GPIOGEN);
+    res[gpioh] = DeviceEntry(gpioh, ci_ahb1, RCC_AHB1ENR_GPIOHEN);
+    res[gpioi] = DeviceEntry(gpioi, ci_ahb1, RCC_AHB1ENR_GPIOIEN);
+    res[gpioj] = DeviceEntry(gpioj, ci_ahb1, RCC_AHB1ENR_GPIOJEN);
+    res[gpiok] = DeviceEntry(gpiok, ci_ahb1, RCC_AHB1ENR_GPIOKEN);
+
+    res[usart1] = DeviceEntry(usart1, ci_apb2, RCC_APB2ENR_USART1EN);
+    res[usart2] = DeviceEntry(usart2, ci_apb1, RCC_APB1ENR_USART2EN);
+    res[spi1] = DeviceEntry(spi1, ci_apb2, RCC_APB2ENR_SPI1EN);
+    res[spi2] = DeviceEntry(spi2, ci_apb1, RCC_APB1ENR_SPI2EN);
+
+#if 0
+#define RCC_AHB1ENR_CRCEN ((uint32_t)0x00001000)
+#define RCC_AHB1ENR_BKPSRAMEN ((uint32_t)0x00040000)
+#define RCC_AHB1ENR_CCMDATARAMEN ((uint32_t)0x00100000)
+#define RCC_AHB1ENR_DMA1EN ((uint32_t)0x00200000)
+#define RCC_AHB1ENR_DMA2EN ((uint32_t)0x00400000)
+#define RCC_AHB1ENR_DMA2DEN ((uint32_t)0x00800000)
+#define RCC_AHB1ENR_ETHMACEN ((uint32_t)0x02000000)
+#define RCC_AHB1ENR_ETHMACTXEN ((uint32_t)0x04000000)
+#define RCC_AHB1ENR_ETHMACRXEN ((uint32_t)0x08000000)
+#define RCC_AHB1ENR_ETHMACPTPEN ((uint32_t)0x10000000)
+#define RCC_AHB1ENR_OTGHSEN ((uint32_t)0x20000000)
+#define RCC_AHB1ENR_OTGHSULPIEN ((uint32_t)0x40000000)
+#endif
+
+    return res;
+}
+
+static const constexpr array_result<DeviceEntry, dev_endIndex> devTable =
+    calcDevTable();
+
+// Given list of devices, calculate RCC register modification masks.
+template <Dev_e... devices>
+constexpr auto
+rccCalcRccMask() -> RccChangeSet
+{
+    RccChangeSet res;
+    Dev_e devs[] = {devices...};
+    for (auto i : devs)
+    {
+        const DeviceEntry& e = devTable[i];
+        if (e.reg == ci_endIndex)
+            throw 1; // Will fail at compile time if device lack rcc register.
+        res.vals[e.reg] |= e.bitMask;
+    }
+    return res;
+}
+
+template <Dev_e... devices>
+void
+rccEnableClock(RCC_TypeDef* rcc)
+{
+    constexpr RccChangeSet cset = rccCalcRccMask<devices...>();
+
+    setBits<uint32_t, cset.vals[ci_ahb1]>(rcc->AHB1ENR);
+    setBits<uint32_t, cset.vals[ci_ahb2]>(rcc->AHB2ENR);
+    setBits<uint32_t, cset.vals[ci_ahb3]>(rcc->AHB3ENR);
+    setBits<uint32_t, cset.vals[ci_apb1]>(rcc->APB1ENR);
+    setBits<uint32_t, cset.vals[ci_apb2]>(rcc->APB2ENR);
+}
+
+template <Dev_e... devices>
+void
+rccReset(RCC_TypeDef* rcc)
+{
+    constexpr RccChangeSet cset = rccCalcRccMask<devices...>();
+
+    setBits<uint32_t, cset.vals[ci_ahb1]>(rcc->AHB1RSTR);
+    clearBits<uint32_t, cset.vals[ci_ahb1]>(rcc->AHB1RSTR);
+
+    setBits<uint32_t, cset.vals[ci_ahb2]>(rcc->AHB2RSTR);
+    clearBits<uint32_t, cset.vals[ci_ahb2]>(rcc->AHB2RSTR);
+
+    setBits<uint32_t, cset.vals[ci_ahb3]>(rcc->AHB3RSTR);
+    clearBits<uint32_t, cset.vals[ci_ahb3]>(rcc->AHB3RSTR);
+
+    setBits<uint32_t, cset.vals[ci_apb1]>(rcc->APB1RSTR);
+    clearBits<uint32_t, cset.vals[ci_apb1]>(rcc->APB1RSTR);
+
+    setBits<uint32_t, cset.vals[ci_apb2]>(rcc->APB2RSTR);
+    clearBits<uint32_t, cset.vals[ci_apb2]>(rcc->APB2RSTR);
+}
+
+TEST(bitops, demo_rcc_expansion)
+{
+    RCC_TypeDef rccS = {};
+    RCC_TypeDef* rcc = &rccS;
+
+    rccEnableClock<gpioa, gpioc, gpiof, usart1, usart2, spi1>(rcc);
+
+    printf("mask : %xu\n", rcc->AHB1ENR);
+    printf("mask : %xu\n", rcc->AHB2ENR);
+    printf("mask : %xu\n", rcc->AHB3ENR);
+    printf("mask : %xu\n", rcc->APB1ENR);
+    printf("mask : %xu\n", rcc->APB2ENR);
+}
+
 int
 main(int argc, char** argv)
 {

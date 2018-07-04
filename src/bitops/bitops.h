@@ -168,11 +168,19 @@ clearBit(Storage& val, int bitNo)
  * @param val Reference to value to update.
  * @param setValue Bitmask with bits to set.
  */
-template <typename Storage, Storage setValue>
+template <typename Storage>
 void
-setBits(Storage& val)
+setBits(Storage& val, const Storage& setValue)
 {
     val |= setValue;
+}
+
+template <typename Storage>
+void
+setBits(volatile Storage& val, const Storage& setValue)
+{
+    if (setValue)
+        val |= setValue;
 }
 
 /**
@@ -183,11 +191,19 @@ setBits(Storage& val)
  * @param val Reference to value to update.
  * @param setValue Bitmask with bits to set.
  */
-template <typename Storage>
+template <typename Storage, Storage setValue>
 void
-setBits(Storage& val, const Storage& setValue)
+setBits(Storage& val)
 {
     val |= setValue;
+}
+
+template <typename Storage, Storage setValue>
+void
+setBits(volatile Storage& val)
+{
+    if (setValue)
+        val |= setValue;
 }
 
 /**
@@ -203,6 +219,14 @@ void
 clearBits(Storage& val)
 {
     val &= ~clearValue;
+}
+
+template <typename Storage, Storage clearValue>
+void
+clearBits(volatile Storage& val)
+{
+    if (clearValue)
+        val &= ~clearValue;
 }
 
 /**
