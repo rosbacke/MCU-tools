@@ -295,8 +295,7 @@ TEST(bitops, test_clear_set_functions_of_bitfield)
 
 TEST(Range, bitmask)
 {
-    auto constexpr t = bitops::bitmask2Range<uint32_t, 0x0007f800u>();
-    using rng = decltype(t);
+    using rng = decltype(bitops::bitmask2Range<uint32_t, 0x0007f800u>());
     EXPECT_EQ(rng::lowBit, 11);
     EXPECT_EQ(rng::width, 8);
     EXPECT_EQ(rng::endBit, 19);
