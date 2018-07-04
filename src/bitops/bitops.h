@@ -451,43 +451,23 @@ updateBitsSetField(Storage& val, Storage setValue)
  * @param lowBit_ index of the lowest bit position for the range.
  * @param width_ Number of bits in the range.
  */
-template <class Storage, int lowBit_, int width_>
+template <class Storage_, int lowBit_, int width_>
 struct Range
 {
-#if 0
-	static constexpr int lowBit = lowBit_;
-	static constexpr int endBit = lowBit_ + width_;
-
-	static_assert(endBit <= bitWidth<Storage>(), "");
-
-	static constexpr int width = width_;
-	// Max value the range can store.
-	static constexpr Storage  maxValue = (1ull << width) - 1;
-#endif
-
-    static constexpr int lowBit()
+    using Storage = Storage_;
+    enum
     {
-        return lowBit_;
-    }
-    static constexpr int endBit()
-    {
-        return lowBit_ + width_;
-    }
-    static_assert(endBit() <= bitWidth<Storage>(), "");
-
-    static constexpr int width()
-    {
-        return width_;
-    }
-    static constexpr Storage maxValue()
-    {
-        return (1ull << width()) - 1;
-    }
+        lowBit = lowBit_,
+        endBit = lowBit_ + width_,
+        width = width_,
+        maxValue = 1ull << width - 1,
+    };
+    static_assert(endBit <= bitWidth<Storage>(), "");
 
     // Return a value suitable for masking the range in a store.
     static constexpr Storage mask()
     {
-        return static_cast<Storage>((1ull << width()) << lowBit());
+        return static_cast<Storage>(((1ull << width) - 1) << lowBit);
     }
 
     // Return value shifted into the proper range position.
@@ -495,11 +475,11 @@ struct Range
     static constexpr Storage value2Storage()
     {
         static_assert(value <= maxValue, "");
-        return value << lowBit();
+        return value << lowBit;
     }
     static constexpr Storage value2Storage(Storage value)
     {
-        return value << lowBit();
+        return value << lowBit;
     }
 };
 
@@ -536,6 +516,7 @@ template <typename Storage_, typename FieldType_, int offset_, int width_>
 class BitField
 {
   public:
+    using Rng = Range<Storage_, offset_, width_>;
     enum
     {
         offset = offset_,
@@ -557,11 +538,9 @@ class BitField
     template <FieldType_ f>
     static WordUpdate<Storage> value()
     {
-        const Storage toSet =
-            static_cast<Storage>(static_cast<int>(f) << offset);
-        const Storage toClear =
-            static_cast<Storage>(((1 << width) - 1) << offset) & ~toSet;
-
+        const constexpr Storage sf = static_cast<Storage>(f);
+        const constexpr Storage toSet = Rng::value2Storage(sf);
+        const constexpr Storage toClear = Rng::mask() & ~toSet;
         return WordUpdate<Storage_>(toClear, toSet);
     }
 
@@ -582,11 +561,7 @@ template <typename BitField>
 constexpr typename BitField::Storage
 bitFieldMask()
 {
-    using Storage = typename BitField::Storage;
-    const int offset = BitField::offset;
-    const int width = BitField::width;
-    static_assert(bitWidth<Storage>() >= offset + width, "");
-    return static_cast<Storage>(((1 << width) - 1) << offset);
+    return BitField::Rng::mask();
 }
 
 /**
@@ -602,11 +577,8 @@ constexpr typename BitField::Storage
 bitFieldClearBits()
 {
     using Storage = typename BitField::Storage;
-    const int offset = BitField::offset;
-    const int width = BitField::width;
-    static_assert(bitWidth<Storage>() >= offset + width, "");
-    Storage t = ~value & ((1u << width) - 1u);
-    return static_cast<Storage>(t << offset);
+    return BitField::Rng::mask() &
+           ~BitField::Rng::value2Storage(static_cast<Storage>(value));
 }
 
 /**

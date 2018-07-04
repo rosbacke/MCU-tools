@@ -297,9 +297,9 @@ TEST(Range, bitmask)
 {
     auto constexpr t = bitops::bitmask2Range<uint32_t, 0x0007f800u>();
     using rng = decltype(t);
-    EXPECT_EQ(rng::lowBit(), 11);
-    EXPECT_EQ(rng::width(), 8);
-    EXPECT_EQ(rng::endBit(), 19);
+    EXPECT_EQ(rng::lowBit, 11);
+    EXPECT_EQ(rng::width, 8);
+    EXPECT_EQ(rng::endBit, 19);
 }
 
 int
