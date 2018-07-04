@@ -5,7 +5,7 @@
  *      Author: mikaelr
  */
 
-#include <bitops.h>
+#include "bitops.h"
 
 #include <gtest/gtest.h>
 
