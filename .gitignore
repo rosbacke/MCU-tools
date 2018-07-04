@@ -5,7 +5,7 @@
 # Emacs litter.
 *~
 src/bitops/bitops
+src/bitops/cmake-build-debug
 src/callback/callback
 src/callback/callback2
-
-
+.idea

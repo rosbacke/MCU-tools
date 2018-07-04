@@ -62,6 +62,8 @@ lowestClearBit(Storage value, int size)
     else
         return lowestClearBit(value, halfSize);
 }
+
+
 }
 
 /**
@@ -100,6 +102,25 @@ maskEndBit()
 {
     return details::lowestClearBit<Storage>(mask, bitWidth<Storage>());
 }
+
+/**
+ * Return the width of a supplied bitmask. E.g. 0x38
+ * return 3 bit width.
+ */
+template<typename Storage, Storage mask>
+constexpr int
+maskWidth()
+{
+    return maskEndBit<Storage, mask>() - maskLowBit<Storage, mask>();
+};
+
+template<typename Storage>
+constexpr int
+maskWidth(Storage mask)
+{
+    return maskEndBit(mask) - maskLowBit(mask);
+};
+
 
 /**
  * Set a bit in an integral type.
@@ -490,7 +511,7 @@ struct Range
 template <typename Storage, Storage bitMask>
 auto constexpr bitmask2Range()
     -> Range<Storage, maskLowBit<Storage, bitMask>(),
-             maskEndBit<Storage, bitMask>() - maskLowBit<Storage, bitMask>()>
+             maskWidth<Storage, bitMask>()>
 {
     return {};
 }
@@ -728,7 +749,12 @@ write(typename BitField::Storage& s)
     WriteImplSpecialize1Bit<BitField, value, BitField::width>::write(s);
 }
 
-// Write a value to a bitfield.
+/**
+ * Write a BitField value into a backing store.
+ * @tparam BitField Type of the BitField.
+ * @param s backing storage where value is written.
+ * @param value Value to be written.
+ */
 template <typename BitField>
 void
 write(typename BitField::Storage& s, typename BitField::FieldType value)
