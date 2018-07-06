@@ -503,7 +503,7 @@ struct Range
 
 /**
  * Given an integral value that is a bitmask, calculate the appropriate range
- * type.
+ * type. Typical use is to derive a Range from a legacy C bitmask macro value.
  */
 template <typename Storage, Storage bitMask>
 auto constexpr bitmask2Range() -> Range<Storage, maskLowBit<Storage, bitMask>(),
