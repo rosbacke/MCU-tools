@@ -99,30 +99,30 @@ class delegate<R(Args...)>
 
   public:
     // Default construct with stored ptr == nullptr.
-    delegate() : m_cb(nullptr), m_ptr(nullptr){};
+    constexpr delegate() : m_cb(nullptr), m_ptr(nullptr){};
 
     ~delegate(){};
 
     // Call the stored function. Requires: bool(*this) == true;
     // Will call trampoline fkn which will call the final fkn.
-    R operator()(Args... args) __attribute__((always_inline))
+    constexpr R operator()(Args... args) __attribute__((always_inline))
     {
         return m_cb(m_ptr, args...);
     }
 
     // Return true if a function pointer is stored.
-    operator bool() const noexcept
+    constexpr operator bool() const noexcept
     {
         return m_cb != nullptr;
     }
 
     // Return the function pointer to allow easy checking versus nullptr
-    operator Trampoline() const noexcept
+    constexpr operator Trampoline() const noexcept
     {
         return m_cb;
     }
 
-    void clear()
+    constexpr void clear()
     {
         m_cb = nullptr;
         m_ptr = nullptr;
@@ -226,7 +226,7 @@ class delegate<R(Args...)>
      * Create a callback using a run-time variable fkn pointer
      * using voids. No adapter function is used.
      */
-    static delegate makeVoidCB(Trampoline fkn, void* ptr = nullptr)
+    static constexpr delegate makeVoidCB(Trampoline fkn, void* ptr = nullptr)
     {
         return delegate(fkn, ptr);
     }
@@ -249,13 +249,14 @@ class delegate<R(Args...)>
  *
  * @param fknType Template parameter for the function signature in std::function
  * style.
- * @param memFknPtr address of member function pointer. C++ require full name path.
+ * @param memFknPtr address of member function pointer. C++ require full name
+ * path.
  * @object object which the member function should be called on.
  */
-#define MAKE_MEMBER_DEL(fknType, memFknPtr, object)                             \
-                                                                             \
+#define MAKE_MEMBER_DEL(fknType, memFknPtr, object)                         \
+                                                                            \
     (delegate<fknType>::make<std::remove_reference<decltype(object)>::type, \
-                              memFkn>(object))
+                             memFkn>(object))
 
 /**
  * Helper macro to create a delegate for calling a free function
@@ -273,9 +274,9 @@ class delegate<R(Args...)>
  * @object Pointer to be supplied as first argument to function.
  *
  */
-#define MAKE_FREE_DEL(fknType, fkn, ptr)                                  \
-                                                                          \
-    (delegate<fknType>::make<std::remove_reference<decltype(ptr)>::type, \
-                              fkn>(ptr))
+#define MAKE_FREE_DEL(fknType, fkn, ptr)                                       \
+                                                                               \
+    (delegate<fknType>::make<std::remove_reference<decltype(ptr)>::type, fkn>( \
+        ptr))
 
 #endif /* UTILITY_CALLBACK_H_ */

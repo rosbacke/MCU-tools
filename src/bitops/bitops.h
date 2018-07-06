@@ -62,8 +62,6 @@ lowestClearBit(Storage value, int size)
     else
         return lowestClearBit(value, halfSize);
 }
-
-
 }
 
 /**
@@ -107,20 +105,19 @@ maskEndBit()
  * Return the width of a supplied bitmask. E.g. 0x38
  * return 3 bit width.
  */
-template<typename Storage, Storage mask>
+template <typename Storage, Storage mask>
 constexpr int
 maskWidth()
 {
     return maskEndBit<Storage, mask>() - maskLowBit<Storage, mask>();
 };
 
-template<typename Storage>
+template <typename Storage>
 constexpr int
 maskWidth(Storage mask)
 {
     return maskEndBit(mask) - maskLowBit(mask);
 };
-
 
 /**
  * Set a bit in an integral type.
@@ -509,9 +506,8 @@ struct Range
  * type.
  */
 template <typename Storage, Storage bitMask>
-auto constexpr bitmask2Range()
-    -> Range<Storage, maskLowBit<Storage, bitMask>(),
-             maskWidth<Storage, bitMask>()>
+auto constexpr bitmask2Range() -> Range<Storage, maskLowBit<Storage, bitMask>(),
+                                        maskWidth<Storage, bitMask>()>
 {
     return {};
 }

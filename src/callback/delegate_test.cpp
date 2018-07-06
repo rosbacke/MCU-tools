@@ -56,7 +56,6 @@ testFreeFunction()
     cb = cb;
     res = cb(5, 2);
     assert(res == 3);
-
 }
 
 struct TestObj
