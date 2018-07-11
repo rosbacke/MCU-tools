@@ -42,9 +42,29 @@
  * cb(val);
  * For free functions, the supplied void pointer get the value from the call
  * setup.
+ *
+ * The null value for the delegate is a special nullFkn. Calling a delegate
+ * with a null value is a no-op and the possibly returned value is
+ * a default constructed object of the relevant type.
  */
 template <typename T>
 class delegate;
+
+namespace details
+{
+template <typename T>
+T
+nullReturnFunction()
+{
+    return T{};
+}
+template <>
+void
+nullReturnFunction()
+{
+    return;
+}
+}
 
 /**
  * Class for storing the callable object
@@ -57,6 +77,12 @@ class delegate;
 template <typename R, typename... Args>
 class delegate<R(Args...)>
 {
+    // Adaptor function for when the delegate is expected to be a nullptr.
+    inline static R doNullFkn(void* v, Args... args)
+    {
+        return details::nullReturnFunction<R>();
+    }
+
     // Adaptor function for the case where void* is not forwarded
     // to the caller. (Just a normal function pointer.)
     template <R(freeFkn)(Args...)>
@@ -85,9 +111,9 @@ class delegate<R(Args...)>
     // Adapter function for when the stored object is a pointer to a
     // callable object (stored elsewhere). Call it using operator().
     template <class Functor>
-    inline static R doFunctor(void* o, Args... args)
+    inline static R doFunctor(void* o_arg, Args... args)
     {
-        auto obj = static_cast<Functor*>(o);
+        auto obj = static_cast<Functor*>(o_arg);
         return (*obj)(args...);
     }
 
@@ -99,7 +125,8 @@ class delegate<R(Args...)>
 
   public:
     // Default construct with stored ptr == nullptr.
-    constexpr delegate() : m_cb(nullptr), m_ptr(nullptr){};
+    constexpr delegate(const std::nullptr_t& nptr = nullptr)
+        : m_cb(&doNullFkn), m_ptr(nullptr){};
 
     ~delegate(){};
 
@@ -110,21 +137,25 @@ class delegate<R(Args...)>
         return m_cb(m_ptr, args...);
     }
 
+    constexpr bool equal(const delegate& rhs) const
+    {
+        return m_cb == rhs.m_cb && m_ptr == rhs.m_ptr;
+    }
+
+    constexpr bool null() const
+    {
+        return m_cb == doNullFkn;
+    }
+
     // Return true if a function pointer is stored.
     constexpr operator bool() const noexcept
     {
-        return m_cb != nullptr;
-    }
-
-    // Return the function pointer to allow easy checking versus nullptr
-    constexpr operator Trampoline() const noexcept
-    {
-        return m_cb;
+        return !null();
     }
 
     constexpr void clear()
     {
-        m_cb = nullptr;
+        m_cb = doNullFkn;
         m_ptr = nullptr;
     }
 
@@ -135,7 +166,10 @@ class delegate<R(Args...)>
     template <R (*fkn)(Args... args)>
     constexpr delegate& set()
     {
-        m_cb = &doFreeCB<fkn>;
+        if (fkn)
+            m_cb = &doFreeCB<fkn>;
+        else
+            m_cb = &doNullFkn;
         m_ptr = nullptr;
         return *this;
     }
@@ -238,6 +272,52 @@ class delegate<R(Args...)>
     Trampoline m_cb;
     void* m_ptr;
 };
+
+template <typename R, typename... Args>
+bool
+operator==(const delegate<R(Args...)>& lhs, const delegate<R(Args...)>& rhs)
+{
+    return lhs.equal(rhs);
+}
+
+template <typename R, typename... Args>
+bool
+operator!=(const delegate<R(Args...)>& lhs, const delegate<R(Args...)>& rhs)
+{
+    return !(lhs == rhs);
+}
+
+// Bite the bullet, this is how unique_ptr handle nullptr_t.
+template <typename R, typename... Args>
+bool
+operator==(std::nullptr_t lhs, const delegate<R(Args...)>& rhs)
+{
+    return rhs.null();
+}
+
+template <typename R, typename... Args>
+bool
+operator!=(std::nullptr_t lhs, const delegate<R(Args...)>& rhs)
+{
+    return !(lhs == rhs);
+}
+
+template <typename R, typename... Args>
+bool
+operator==(const delegate<R(Args...)>& lhs, std::nullptr_t rhs)
+{
+    return lhs.null();
+}
+
+template <typename R, typename... Args>
+bool
+operator!=(const delegate<R(Args...)>& lhs, std::nullptr_t rhs)
+{
+    return !(lhs == rhs);
+}
+
+// No ordering operators ( operator< etc). This delgate represent several
+// classes of pointers and is not a natually ordered type.
 
 /**
  * Helper macro to create a delegate for calling a member function.
