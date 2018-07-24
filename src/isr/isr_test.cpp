@@ -9,36 +9,30 @@
 #include <assert.h>
 #include <atomic>
 
-static inline void
-compilerBarrier()
-{
-    asm volatile("" : : : "memory");
-}
-
 struct CoverTest
 {
   public:
     void protect()
     {
-        m_protect = true;
+        m_protect = 1;
     }
     void unprotect()
     {
-        m_unprotect = true;
+        m_unprotect = 1;
     }
     void sync()
     {
-        m_sync = true;
+        m_sync = 1;
     }
     void unsync()
     {
-        m_unsync = true;
+        m_unsync = 1;
     }
 
-    bool m_protect = false;
-    bool m_unprotect = false;
-    bool m_sync = false;
-    bool m_unsync = false;
+    int m_protect = 0;
+    int m_unprotect = 0;
+    int m_sync = 0;
+    int m_unsync = 0;
 };
 
 void
@@ -47,22 +41,22 @@ test_CoverTest()
     isr::cover<CoverTest> cov;
     auto& ct = cov.systemCover();
 
-    assert(ct.m_protect == false);
-    assert(ct.m_unprotect == false);
-    assert(ct.m_sync == false);
-    assert(ct.m_unsync == false);
+    assert(ct.m_protect == 0);
+    assert(ct.m_unprotect == 0);
+    assert(ct.m_sync == 0);
+    assert(ct.m_unsync == 0);
     {
         auto lk = isr::make_protectlock(cov);
         //		isr::protect_lock<isr::cover<CoverTest>> lk(cov);
-        assert(ct.m_protect == true);
-        assert(ct.m_unprotect == false);
-        assert(ct.m_sync == false);
-        assert(ct.m_unsync == false);
+        assert(ct.m_protect == 1);
+        assert(ct.m_unprotect == 0);
+        assert(ct.m_sync == 0);
+        assert(ct.m_unsync == 0);
     }
-    assert(ct.m_protect == true);
-    assert(ct.m_unprotect == true);
-    assert(ct.m_sync == false);
-    assert(ct.m_unsync == false);
+    assert(ct.m_protect == 1);
+    assert(ct.m_unprotect == 1);
+    assert(ct.m_sync == 0);
+    assert(ct.m_unsync == 0);
 }
 
 void
@@ -71,28 +65,29 @@ test_CoverTest2()
     isr::cover<CoverTest> cov;
     auto& ct = cov.systemCover();
 
-    assert(ct.m_protect == false);
-    assert(ct.m_unprotect == false);
-    assert(ct.m_sync == false);
-    assert(ct.m_unsync == false);
+    assert(ct.m_protect == 0);
+    assert(ct.m_unprotect == 0);
+    assert(ct.m_sync == 0);
+    assert(ct.m_unsync == 0);
     {
         auto lk = isr::make_synclock(cov);
         // isr::sync_lock<isr::cover<CoverTest>> lk(cov);
-        assert(ct.m_protect == false);
-        assert(ct.m_unprotect == false);
-        assert(ct.m_sync == true);
-        assert(ct.m_unsync == false);
+        assert(ct.m_protect == 0);
+        assert(ct.m_unprotect == 0);
+        assert(ct.m_sync == 1);
+        assert(ct.m_unsync == 0);
     }
-    assert(ct.m_protect == false);
-    assert(ct.m_unprotect == false);
-    assert(ct.m_sync == true);
-    assert(ct.m_unsync == true);
+    assert(ct.m_protect == 0);
+    assert(ct.m_unprotect == 0);
+    assert(ct.m_sync == 1);
+    assert(ct.m_unsync == 1);
 }
 
 void
 test_CoverTestLinux()
 {
-    isr::cover<isr::linux::SystemCover> cov;
+    // Make sure the linux system builds.
+    isr::cover<isr::arch_linux::SystemCover> cov;
     auto& ct = cov.systemCover();
     {
         auto lk = isr::make_protectlock(cov);
@@ -107,4 +102,5 @@ main()
 {
     test_CoverTest();
     test_CoverTest2();
+    test_CoverTestLinux();
 }

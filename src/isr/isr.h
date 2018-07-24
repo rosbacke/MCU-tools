@@ -124,8 +124,9 @@ class protect_lock
     Cover& m_is;
 };
 
-// constructor function, allows deducing template argumet from function argument.
-// Relies on return value copy elision. (Mandatory from C++17, works on most compilers)
+// constructor function, allows deducing template argumet from function
+// argument. Relies on return value copy elision. (Mandatory from C++17, works
+// on most compilers)
 template <typename Cover>
 protect_lock<Cover>
 make_protectlock(Cover& c)
@@ -152,8 +153,9 @@ class sync_lock
     Cover& m_is;
 };
 
-// constructor function, allows deducing template argumet from function argument.
-// Relies on return value copy elision. (Mandatory from C++17, works on most compilers)
+// constructor function, allows deducing template argumet from function
+// argument. Relies on return value copy elision. (Mandatory from C++17, works
+// on most compilers)
 template <typename Cover>
 sync_lock<Cover>
 make_synclock(Cover& c)
@@ -168,13 +170,13 @@ make_synclock(Cover& c)
  */
 
 #if defined(__linux__)
-// Linux do not have interrupt, but we can simulate them with a thread. Hence a mutex
-// should be fine.
+// Linux do not have interrupt, but we can simulate them with a thread. Hence a
+// mutex should be fine.
 #include <mutex>
 
 namespace isr
 {
-namespace linux
+namespace arch_linux
 {
 
 class SystemCover
@@ -234,7 +236,7 @@ class SystemCover
     void unprotect()
     {
         __asm__ __volatile__("" : : : "memory");
-        __asm__ __volatile__(" cpsid i\n");
+        __asm__ __volatile__(" cpsie i\n");
     }
     // Called in isr context to start the isr and sync with the critical
     // section.
@@ -255,7 +257,7 @@ class SystemCover
 
 #endif
 
-// Mainly Cortex M0 microcontroller.
+// Mainly Cortex M3-7 microcontrollers.
 #if defined(__ARM_ARCH_7M__)
 
 namespace isr
@@ -274,7 +276,7 @@ class SystemCover
     void unprotect()
     {
         __asm__ __volatile__("" : : : "memory");
-        __asm__ __volatile__(" cpsid i\n");
+        __asm__ __volatile__(" cpsie i\n");
     }
     void sync()
     {
