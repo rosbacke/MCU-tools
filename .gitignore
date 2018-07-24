@@ -9,4 +9,6 @@ src/bitops/cmake-build-debug
 src/callback/callback
 src/callback/callback2
 src/callback/delegate
+src/isr/a.out
+src/isr/isr_test
 .idea

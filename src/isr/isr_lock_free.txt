@@ -1,0 +1,103 @@
+So how can we run interrupts in a C/C++11 context?
+
+Interrupts follow a more general class of concurrency where
+you have a strict priority ordering between running tasks.
+(Using 'running task' here as a common name for a thread or an interrupt)
+Lets call this 'asymmetric concurrency'.
+
+In this setting each task has a priority value and a task can only
+be started if it has a higher priority than the currently running task.
+In this setting it is possible to run everything on a single stack since
+each task runs to completion before allowing a lower priority task to continue. If a task of the same level is activated, it will be started when
+the previous ends. We have a run to completion semantic.
+
+In this setting, it is vital that a low priority task can not block
+a higher priority task somewhere in the middle. It can block it from 
+starting, but once it is going, it must run to completion.
+
+We till need to communicate between these different parts, so there is a
+need for 'critical sections', that is sequences of code where we can guarantee
+that a particular higher level task will not be started.
+For standard threaded code, the basic primitive used to achieve this
+is the mutex, or some kind of lock. The compiler can always solve a problem
+of risking a data-race by inserting a lock. This doesn't work in assymmetric
+concurrency settings.
+
+The most common place to find this kind of code are in micro controller settings. But it is still relevant for e.g. Linux based simulation of microcontroller code or real time processing systems with strict timing.
+
+Here we will base the work on another primitive instead of the mutex.
+It is the ability to enable/disable the ability to run higher priority tasks. In microcontroolers it is typically enable/disable interrupts.
+
+So whenever we need to operate without interference from higher level tasks
+we can temporarily disable and then reenable them.
+
+That is a base operations that is available in every micro controller. From
+that base, many variations can be made that locks out specific interrupts, 
+interrupts up to a certain level etc. This will be a function of the needed
+area to protect versus the capabilities of the individual platform.
+
+To encasulate this, create a new entity called a 'cover'. In spirit it should
+perform a simiar function as the mutex but in the asymmetric concurrency case.
+
+The cover is an object that a low priority task can call functions 'protect' and unprotect to protect a sequence of code from interference from higher priority tasks.
+
+Just as the mutex have double duty of serializing execution _and_ synchronizing between threads, the cover does the same.
+This is assymetric so the higher priority thread needs separate functions 
+to synchronize. These are the 'acquire' and 'release' functions.
+A task calls acquire prior to reading shared data. This will create
+C++ 'synchronize-with' events and impose an ordering on operations to
+avoid data-races. The release is called after writing data to form the other part of the 'synchronize-with' event.
+When calling 'cover' and 'uncover' they will implicitly call 'acquire' and 'release' to allow a mutex like experience when programming.
+
+Similar to mutex lock guards, we have RAII style helper objects to help out.
+The coverprotect will protect upon construction and unprotect on destruction.
+The coversync will perform an acquire operation on construction and
+release operation on destruction.
+
+The assymmetric operation offer an additional twist. Performing the 'sync' operation ensures there are no data-races versus lower priority tasks. But if you need to read/write any of the shared data in the presence of higher priority tasks, you need to get a coverlock to avoid undefined behavior. 
+A coverlock is a strictly stronger operation than coversync, so you can always
+replace a coversync with a coverlock. The expense is worse latency for high priority tasks.
+Also, the cover affect the entire task. Compared to a mutex which usually only
+protects a small portion of the data, the cover is much more intrusive.
+
+
+The different roles of an atomic:
+
+An atomic variable have several different roles:
+- Make sure an access is seen as 'all or nothing'.
+- Generate synchronize-with events between threads. Will order operations
+  between non atomic variables. (Depending on memory order).
+- Inform the compiler that a particular variable is observable from the 
+  outside.
+
+
+Another way to slice the problem is:
+- Letting the compiler know there are restrictions on the accesses since
+  they are visible from the outside. The compiler must make sure the needed
+  properties hold, including informing the hardware about needed syncronization.
+- The hardware need to offer sufficient syncronization primitives to uphold
+  the conditions.
+
+The memory order constraint only affect the second point. Even a relaxed
+atomic operation need to factor in atomicity (all or nothing) and visibility
+to the outside.
+
+So, for system specific implementations for primitive types, we need single instruction load/store, and a relevant synchronization instruction for the platform.
+A relaxed access typically drops the syncronization. But this will then fail to inform the compiler we have an externally observable operation.
+One way around it is inline assembler with volatle. Marking an access
+as volatile should also work.
+
+So, how do we handle non-blocking atomics if we lack them?
+- Fallback is always to grab a cover and do our operation. It will
+  protect the calculation and release the result once done.
+
+For more optimized versions I will assume we are interested in:
+- Pure load and store. the read/modfy/write are nice to have but less critical.
+- Only primitive types such as pointers / ints etc.
+- I'm also gonna assume there exist 'all-or-nothing' instructions for these
+  operations.
+
+It means we can use
+
+
+I'm gonna assume we are only interested in load & 
