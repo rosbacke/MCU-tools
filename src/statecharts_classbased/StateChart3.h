@@ -72,43 +72,8 @@ struct SubTypeImpl
   using Result = typename SubTypeImpl<index-1, Nodes...>::Result;
 };
 
-// A node in the area calculation tree.
-template<typename State, typename ...Nodes>
-struct FsmIndex2Area;
-
-template<typename State, typename Node, typename ...Nodes>
-struct FsmIndex2Area<State, Node, Nodes...>
-{
-	template<typename Array>
-	void constexpr write(Array& arr, size_t offset)
-	{
-		arr[offset] = State::stateId;
-		FsmIndex2Area<State, Nodes...>::write(arr, offset + Node::area);
-	}
-};
-
-template<typename State, typename Node>
-struct FsmIndex2Area<State, Node>
-{
-	template<typename Array>
-	void constexpr write(Array& arr, size_t offset)
-	{
-		arr[offset] = State::stateId;
-	}
-};
-
-template<typename State>
-struct FsmIndex2Area<State>
-{
-	template<typename Array>
-	void constexpr write(Array& arr, size_t offset)
-	{
-		arr[offset] = State::stateId;
-	}
-};
-
 template<typename Node, typename ...Nodes>
-struct NodeSibTraverse;
+struct TraverseNodes;
 
 template<typename ...N>
 struct SubNodes_
@@ -116,34 +81,47 @@ struct SubNodes_
 
 // Helper struct to implement recursive functions on the FsmNode graph.
 template<typename Node, typename ...Nodes>
-struct NodeSibTraverse
+struct TraverseNodes
 {
-	static constexpr size_t getN(size_t index)
-	{
-	  if (index < 1) {
-	      return 0;
-	    } else {
-	    return NodeSibTraverse<Nodes...>::getN(index-1) + Node::area;
-	  }
-	}
-
 	template<typename Array>
 	static constexpr void writeIndex2Id(Array& array, size_t baseOffset)
 	{
-		NodeSibTraverse<Node>::writeIndex2Id(array, baseOffset);
-		NodeSibTraverse<Nodes...>::writeIndex2Id(array, baseOffset+1);
+		TraverseNodes<Node>::writeIndex2Id(array, baseOffset);
+		TraverseNodes<Nodes...>::writeIndex2Id(array, baseOffset+1);
+	}
+
+	template<typename Array>
+	static constexpr void writeParentIndex(Array& parentArray, size_t baseOffset, size_t parent)
+	{
+		TraverseNodes<Node>::writeParentIndex(parentArray, baseOffset, parent);
+		TraverseNodes<Nodes...>::writeParentIndex(parentArray, baseOffset + Node::area, parent);
+	}
+	template<typename Array>
+	static constexpr size_t writeLevelIndex(Array& levelArray, size_t baseOffset, size_t level)
+	{
+		auto t1 = TraverseNodes<Node>::writeLevelIndex(levelArray, baseOffset, level);
+		auto t2 = TraverseNodes<Nodes...>::writeLevelIndex(levelArray, baseOffset + Node::area, level);
+		return t1 < t2 ? t2 : t1;
 	}
 
 	static constexpr size_t childOffset(size_t childIndex)
 	{
 		if (childIndex == 0)
 			return 0;
-		return Node::area + NodeSibTraverse<Nodes...>::childOffset(childIndex - 1);
+		return Node::area + TraverseNodes<Nodes...>::childOffset(childIndex - 1);
+	}
+	template<size_t childIndex>
+	static constexpr size_t childOffset()
+	{
+		if constexpr (childIndex == 0)
+			return 0;
+		else
+			return Node::area + TraverseNodes<Nodes...>::template childOffset<childIndex - 1>();
 	}
 };
 
 template<typename StateType_, auto id_>
-struct NodeSibTraverse<State<StateType_, id_>>
+struct TraverseNodes<State<StateType_, id_>>
 {
 	template<typename Array>
 	static constexpr void writeIndex2Id(Array& array, size_t baseOffset)
@@ -151,27 +129,52 @@ struct NodeSibTraverse<State<StateType_, id_>>
 		array[ baseOffset ] = id_;
 	}
 
+	template<typename Array>
+	static constexpr void writeParentIndex(Array& parentArray, size_t baseOffset, size_t parent)
+	{
+		parentArray[ baseOffset ] = parent;
+	}
+	template<typename Array>
+	static constexpr size_t writeLevelIndex(Array& levelArray, size_t baseOffset, size_t level)
+	{
+		levelArray[ baseOffset ] = level;
+		return level;
+	}
+
 	static constexpr size_t childOffset(size_t childIndex)
 	{
-		// static_assert(childIndex == 0, "");
+		return 0;
+	}
+	template<size_t childIndex>
+	static constexpr size_t childOffset()
+	{
+		static_assert(childIndex == 0, "Child index out of bounds");
 		return 0;
 	}
 };
 
 template<typename State, typename ...Nodes>
-struct NodeSibTraverse<FsmNode<State, Nodes...>>
+struct TraverseNodes<FsmNode<State, Nodes...>>
 {
 	template<typename Array>
 	static constexpr void writeIndex2Id(Array& array, size_t baseOffset)
 	{
 		array[ baseOffset ] = State::id;
-		NodeSibTraverse<Nodes...>::writeIndex2Id(array, baseOffset + 1);
+		TraverseNodes<Nodes...>::writeIndex2Id(array, baseOffset + 1);
 	}
 
-	static constexpr size_t childOffset(size_t childIndex)
+	template<typename Array>
+	static constexpr void writeParentIndex(Array& parentArray, size_t baseOffset, size_t parent)
 	{
-		// static_assert(childIndex == 0, "");
-		return 0;
+		parentArray[ baseOffset ] = parent;
+		TraverseNodes<Nodes...>::writeParentIndex(parentArray, baseOffset + 1, baseOffset);
+	}
+
+	template<typename Array>
+	static constexpr size_t writeLevelIndex(Array& levelArray, size_t baseOffset, size_t level)
+	{
+		levelArray[ baseOffset ] = level;
+		return TraverseNodes<Nodes...>::writeLevelIndex(levelArray, baseOffset + 1, level + 1);
 	}
 };
 
@@ -192,21 +195,16 @@ public:
 
   using StateType = typename State::StateType;
 
-
-  // Get the offset where a particular subnodes starts.
-  // index 0 : this node, 1 : first subnode.
-  static const constexpr size_t get(size_t index)
-  {
-    if (index < 2) {
-      return index;
-    } else {
-      return 1 + NodeSibTraverse<Nodes...>::getN(index-1); }
-  }
+  // Offset for a child into the linear storage.
   static constexpr size_t childOffset(size_t childIndex)
   {
-	  return 1 + NodeSibTraverse<Nodes...>::childOffset(childIndex);
+	  return 1 + TraverseNodes<Nodes...>::childOffset(childIndex);
   }
-
+  template<size_t childIndex>
+  static constexpr size_t childOffset()
+  {
+	  return 1 + TraverseNodes<Nodes...>::template childOffset<childIndex>();
+  }
 
   // Get the type of for a particular storage at some index.
   template<size_t index>
@@ -218,6 +216,7 @@ template<typename Root>
 class FsmStatic
 {
 public:
+
 	// Total number of states.
 	static const constexpr std::size_t stateNo = Root::area;
 
@@ -227,13 +226,31 @@ public:
 	static auto constexpr initIndex2Id()-> std::array<StateId, stateNo>
 	{
 		std::array<StateId, stateNo> res = {};
-		NodeSibTraverse<Root>::writeIndex2Id(res, 0);
+		TraverseNodes<Root>::writeIndex2Id(res, 0);
 		return res;
 	}
-	static auto constexpr initId2Index()-> std::array<std::size_t, stateNo>
+	static auto constexpr initParentIndex()-> std::array<size_t, stateNo>
 	{
-		std::array<std::size_t, stateNo> res = {};
-		//WriteIndex2Array<Root>::fkn(res, 0);
+		std::array<size_t, stateNo> res = {};
+		//for(auto& i : res) i = 0xff; // For debug.
+
+		// Root always at 0.
+		TraverseNodes<Root>::writeParentIndex(res, 0, 0);
+		return res;
+	}
+
+	struct Level {
+		size_t maxLevel = 0;
+		std::array<size_t, stateNo> levelIndex = {};
+	};
+
+	static auto constexpr initLevels()-> Level
+	{
+		Level res;
+		for(auto& i : res.levelIndex) i = 0xff; // For debug.
+
+		// Root always at 0.
+		res.maxLevel = TraverseNodes<Root>::writeLevelIndex(res.levelIndex, 0, 0);
 		return res;
 	}
 
@@ -242,16 +259,27 @@ public:
 		return {};
 	}
 
+	static constexpr Level levels = initLevels();
+
 	//
 	static constexpr std::array<BuilderFkn, stateNo> id2Builder = initId2Builder();
 
-	// Translation from stateId into index into an array.
-	static constexpr std::array<std::size_t, stateNo> id2Index = initId2Index();
-
-	// Translation from stateId into index into an array.
+	// Translation from index to stateId.
 	static constexpr std::array<StateId, stateNo> index2Id = initIndex2Id();
-};
 
+	// Given a state index return the index to the parent.
+	static constexpr std::array<size_t, stateNo> parentIndex = initParentIndex();
+
+	// Given a state index return the index to the parent.
+	static constexpr const std::array<size_t, stateNo>& levelIndex = levels.levelIndex;
+
+	// Maximum depth of the FSM.
+	static constexpr const size_t maxLevel = levels.maxLevel;
+
+	// Storage depth for a state stack. (includes the root state).
+	static constexpr const size_t maxStackSize = levels.maxLevel + 1;
+
+};
 
 /**
  * The statechart module implement a hierarchical state machine. (Fsm)
