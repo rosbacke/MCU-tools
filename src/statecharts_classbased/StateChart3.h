@@ -24,7 +24,8 @@ public:
 	};
 };
 
-// Explicit type for indexing the Fsm array.
+// Explicit type for indexing the Fsm array. Help the compiler keep track
+// of used indexes.
 struct StateIndex
 {
 	constexpr StateIndex() = default;
@@ -57,7 +58,6 @@ public:
     subStateNo = sizeof...(Nodes)
   };
   static constexpr size_t area = 1 + (... + Nodes::area);
-
 };
 
 // Helper struct to get access to subtypes of a node.
@@ -93,7 +93,7 @@ struct TraverseNodes
 	static constexpr void writeIndex2Id(Array& array, StateIndex baseOffset)
 	{
 		TraverseNodes<Node>::writeIndex2Id(array, baseOffset);
-		TraverseNodes<Nodes...>::writeIndex2Id(array, baseOffset + 1ul);
+		TraverseNodes<Nodes...>::writeIndex2Id(array, baseOffset + Node::area);
 	}
 
 	template<typename Array>
