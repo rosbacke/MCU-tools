@@ -1,0 +1,65 @@
+It should  be possible to define the FSM tree statically
+by declaring substates as template arguments.
+
+Initial idea is to have a separate structure doing this.
+
+Assume a class FsmNode
+
+class S1; 
+class S2;
+class S3;
+class S4;
+
+using Base1 = FsmNode<S3, S1, S2>;  // First base class with S1, S2 as subclasses.
+using Root = FsmNode<S4, Base1, S4>;  
+
+Root node describing the entire FSM, where S3 & S4 are on the same level and S1, S2
+are substates to S3.
+
+A crucial step is to transform this tree of states into a linear array representation.
+This correspond to a depth first search of the tree and laying out the nodes linerarly after
+this order. 
+Main reason for this sorting is that all substates (recursively) will be stored before the 
+next sibling state appears. This allow us to define a property 'area'.
+- Leaf states have an area of 1.
+- Base states have an area of 1 + sum of areas for the nearest substates of the base state.
+Having area and a backlink index from subnodes to their base node allow efficient traversal
+from substates up toward the root, and to sibling states.
+
+Needed output from this array include the following:
+- Total storage size of the static array.
+- The maximum depth in any part of the tree.
+- A way to traverse from a specific node to root effectively.
+
+Additional data of interest, but not yet solved:
+- For a given level, determine the largest state class to get needed memory.
+- Given some identifier of a state, find the right index into the array.
+
+Outstanding questions: What kind of identiier should we use?
+- One option : enum.
+
+Main use is for the 'transition'. To jump within the state machine upon events.
+Also: Identify init state.
+
+Giving some custom type to each state. This is more general than the enum.
+
+
+Assume we are using the enum variant.
+- User supplies enum type.
+- In each declaration of state hierarchy, supply an enum value, so it is part 
+  of the tree hierarchy.
+- When doing a transition we should be able to derive the direct id at compile time.
+- For runtime support, will probably a table. Or runtime search or maybe compile
+  time translation and then storage of indexes in an opaque type.
+  
+- 
+
+
+
+
+
+Can be done by these stages:
+A struct Wrap that handle the diffence between class S(x) and Base1 as arguments above.
+A struct FsmArea used to calculate the area of a base-state and all it's substates recursively.
+A template function 'get' that gets the offset 
+
