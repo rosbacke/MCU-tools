@@ -68,6 +68,7 @@ TEST(StateChart, testStateChart)
 
     FsmStatic<RootNode> fsms;
 
+
     EXPECT_EQ(fsms.stateNo, 3);
     EXPECT_EQ(fsms.index2Id[0], SId::root);
     EXPECT_EQ(fsms.index2Id[1], SId::state1);

@@ -18,21 +18,26 @@ public:
 	using StateId = decltype(id_);
 	using StateType = StateType_;
 	static constexpr StateId id = id_;
+	static constexpr size_t area = 1;
 	enum {
-		area = 1,
 	    subStateNo = 0
 	};
 };
 
-// Class containing per state static data.
-struct StateData
-{};
-
 // Explicit type for indexing the Fsm array.
-struct FsmIndex
+struct StateIndex
 {
-	explicit FsmIndex(std::size_t i) : index(i) {}
-	std::size_t index;
+	constexpr StateIndex() = default;
+	explicit constexpr StateIndex(std::size_t i) : index(i) {}
+
+	constexpr size_t get() const
+	{ return index; }
+	constexpr StateIndex operator+(size_t i) const
+	{ StateIndex t(index + i); return t; }
+	constexpr bool operator==(int i) const
+	{ return index == i; }
+
+	std::size_t index = 0;
 };
 
 // A Node in the FSM tree.
@@ -49,9 +54,10 @@ class FsmArea
 public:
   enum {
     // Note: fold expression (C++17)
-    area = 1 + (... + Nodes::area),
     subStateNo = sizeof...(Nodes)
   };
+  static constexpr size_t area = 1 + (... + Nodes::area);
+
 };
 
 // Helper struct to get access to subtypes of a node.
@@ -84,20 +90,20 @@ template<typename Node, typename ...Nodes>
 struct TraverseNodes
 {
 	template<typename Array>
-	static constexpr void writeIndex2Id(Array& array, size_t baseOffset)
+	static constexpr void writeIndex2Id(Array& array, StateIndex baseOffset)
 	{
 		TraverseNodes<Node>::writeIndex2Id(array, baseOffset);
-		TraverseNodes<Nodes...>::writeIndex2Id(array, baseOffset+1);
+		TraverseNodes<Nodes...>::writeIndex2Id(array, baseOffset + 1ul);
 	}
 
 	template<typename Array>
-	static constexpr void writeParentIndex(Array& parentArray, size_t baseOffset, size_t parent)
+	static constexpr void writeParentIndex(Array& parentArray, StateIndex baseOffset, StateIndex parent)
 	{
 		TraverseNodes<Node>::writeParentIndex(parentArray, baseOffset, parent);
 		TraverseNodes<Nodes...>::writeParentIndex(parentArray, baseOffset + Node::area, parent);
 	}
 	template<typename Array>
-	static constexpr size_t writeLevelIndex(Array& levelArray, size_t baseOffset, size_t level)
+	static constexpr size_t writeLevelIndex(Array& levelArray, StateIndex baseOffset, size_t level)
 	{
 		auto t1 = TraverseNodes<Node>::writeLevelIndex(levelArray, baseOffset, level);
 		auto t2 = TraverseNodes<Nodes...>::writeLevelIndex(levelArray, baseOffset + Node::area, level);
@@ -108,7 +114,7 @@ struct TraverseNodes
 	{
 		if (childIndex == 0)
 			return 0;
-		return Node::area + TraverseNodes<Nodes...>::childOffset(childIndex - 1);
+		return Node::area + TraverseNodes<Nodes...>::childOffset(childIndex + -1);
 	}
 	template<size_t childIndex>
 	static constexpr size_t childOffset()
@@ -124,20 +130,20 @@ template<typename StateType_, auto id_>
 struct TraverseNodes<State<StateType_, id_>>
 {
 	template<typename Array>
-	static constexpr void writeIndex2Id(Array& array, size_t baseOffset)
+	static constexpr void writeIndex2Id(Array& array, StateIndex baseOffset)
 	{
-		array[ baseOffset ] = id_;
+		array[ baseOffset.get() ] = id_;
 	}
 
 	template<typename Array>
-	static constexpr void writeParentIndex(Array& parentArray, size_t baseOffset, size_t parent)
+	static constexpr void writeParentIndex(Array& parentArray, StateIndex baseOffset, StateIndex parent)
 	{
-		parentArray[ baseOffset ] = parent;
+		parentArray[ baseOffset.get() ] = parent;
 	}
 	template<typename Array>
-	static constexpr size_t writeLevelIndex(Array& levelArray, size_t baseOffset, size_t level)
+	static constexpr size_t writeLevelIndex(Array& levelArray, StateIndex baseOffset, size_t level)
 	{
-		levelArray[ baseOffset ] = level;
+		levelArray[ baseOffset.get() ] = level;
 		return level;
 	}
 
@@ -157,24 +163,29 @@ template<typename State, typename ...Nodes>
 struct TraverseNodes<FsmNode<State, Nodes...>>
 {
 	template<typename Array>
-	static constexpr void writeIndex2Id(Array& array, size_t baseOffset)
+	static constexpr void writeIndex2Id(Array& array, StateIndex baseOffset)
 	{
-		array[ baseOffset ] = State::id;
-		TraverseNodes<Nodes...>::writeIndex2Id(array, baseOffset + 1);
+		array[ baseOffset.get() ] = State::id;
+		TraverseNodes<Nodes...>::writeIndex2Id(array, baseOffset + 1ul);
 	}
 
 	template<typename Array>
-	static constexpr void writeParentIndex(Array& parentArray, size_t baseOffset, size_t parent)
+	static constexpr void writeParentIndex(Array& parentArray, StateIndex baseOffset, StateIndex parent)
 	{
-		parentArray[ baseOffset ] = parent;
-		TraverseNodes<Nodes...>::writeParentIndex(parentArray, baseOffset + 1, baseOffset);
+		parentArray[ baseOffset.get() ] = parent;
+		// Note: This temporary seems to be needed to avoid miscalculating the indexes.
+		// It sure looks like a compiler bug...
+		// At the same time, same behavior in clang-6/gcc-8
+		const StateIndex bo = baseOffset;
+		// TraverseNodes<Nodes...>::writeParentIndex(parentArray, baseOffset + 1ul, baseOffset);
+		TraverseNodes<Nodes...>::writeParentIndex(parentArray, bo + 1ul, bo);
 	}
 
 	template<typename Array>
-	static constexpr size_t writeLevelIndex(Array& levelArray, size_t baseOffset, size_t level)
+	static constexpr size_t writeLevelIndex(Array& levelArray, StateIndex baseOffset, size_t level)
 	{
-		levelArray[ baseOffset ] = level;
-		return TraverseNodes<Nodes...>::writeLevelIndex(levelArray, baseOffset + 1, level + 1);
+		levelArray[ baseOffset.get() ] = level;
+		return TraverseNodes<Nodes...>::writeLevelIndex(levelArray, baseOffset + 1ul, level + 1);
 	}
 };
 
@@ -196,14 +207,14 @@ public:
   using StateType = typename State::StateType;
 
   // Offset for a child into the linear storage.
-  static constexpr size_t childOffset(size_t childIndex)
+  static constexpr StateIndex childOffset(size_t childIndex)
   {
-	  return 1 + TraverseNodes<Nodes...>::childOffset(childIndex);
+	  return StateIndex(TraverseNodes<Nodes...>::childOffset(childIndex) + 1);
   }
   template<size_t childIndex>
-  static constexpr size_t childOffset()
+  static constexpr StateIndex childOffset()
   {
-	  return 1 + TraverseNodes<Nodes...>::template childOffset<childIndex>();
+	  return StateIndex(TraverseNodes<Nodes...>::template childOffset<childIndex>() + 1);
   }
 
   // Get the type of for a particular storage at some index.
@@ -226,16 +237,14 @@ public:
 	static auto constexpr initIndex2Id()-> std::array<StateId, stateNo>
 	{
 		std::array<StateId, stateNo> res = {};
-		TraverseNodes<Root>::writeIndex2Id(res, 0);
+		TraverseNodes<Root>::writeIndex2Id(res, StateIndex(0));
 		return res;
 	}
-	static auto constexpr initParentIndex()-> std::array<size_t, stateNo>
+	static auto constexpr initParentIndex()-> std::array<StateIndex, stateNo>
 	{
-		std::array<size_t, stateNo> res = {};
-		//for(auto& i : res) i = 0xff; // For debug.
-
-		// Root always at 0.
-		TraverseNodes<Root>::writeParentIndex(res, 0, 0);
+		std::array<StateIndex, stateNo> res;
+		for(auto& i : res) i = StateIndex(0xff); // For debug.
+		TraverseNodes<Root>::writeParentIndex(res, StateIndex(0), StateIndex(0));
 		return res;
 	}
 
@@ -247,10 +256,8 @@ public:
 	static auto constexpr initLevels()-> Level
 	{
 		Level res;
-		for(auto& i : res.levelIndex) i = 0xff; // For debug.
-
-		// Root always at 0.
-		res.maxLevel = TraverseNodes<Root>::writeLevelIndex(res.levelIndex, 0, 0);
+		// for(auto& i : res.levelIndex) i = 0xff; // For debug.
+		res.maxLevel = TraverseNodes<Root>::writeLevelIndex(res.levelIndex, StateIndex(0), 0);
 		return res;
 	}
 
@@ -259,16 +266,17 @@ public:
 		return {};
 	}
 
-	static constexpr Level levels = initLevels();
+	static constexpr const Level levels = initLevels();
 
 	//
-	static constexpr std::array<BuilderFkn, stateNo> id2Builder = initId2Builder();
+	static constexpr const std::array<BuilderFkn, stateNo> id2Builder = initId2Builder();
 
 	// Translation from index to stateId.
-	static constexpr std::array<StateId, stateNo> index2Id = initIndex2Id();
+	static constexpr const std::array<StateId, stateNo> index2Id = initIndex2Id();
 
 	// Given a state index return the index to the parent.
-	static constexpr std::array<size_t, stateNo> parentIndex = initParentIndex();
+	static constexpr const std::array<StateIndex, stateNo> parentIndex = initParentIndex();
+
 
 	// Given a state index return the index to the parent.
 	static constexpr const std::array<size_t, stateNo>& levelIndex = levels.levelIndex;
@@ -278,7 +286,6 @@ public:
 
 	// Storage depth for a state stack. (includes the root state).
 	static constexpr const size_t maxStackSize = levels.maxLevel + 1;
-
 };
 
 /**
