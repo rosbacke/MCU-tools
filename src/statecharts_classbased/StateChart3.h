@@ -9,6 +9,7 @@
 #define SRC_STATECHART_STATECHART_H_
 
 #include <array>
+#include <tuple>
 
 // Collector class of a State type and the identifier.
 template<typename StateType_, auto id_>
@@ -287,6 +288,74 @@ public:
 	// Storage depth for a state stack. (includes the root state).
 	static constexpr const size_t maxStackSize = levels.maxLevel + 1;
 };
+
+template<class Event>
+class ModelIface
+{
+public:
+	virtual bool event(const Event& e)=0;
+};
+
+
+template<typename State, typename Event>
+class Model : public ModelIface<Event>
+{
+public:
+	template<typename ...Args>
+	explicit Model(Args... args) : state(args...)
+	{}
+
+	bool event(const Event& e) override
+	{
+		return state.event(e);
+	}
+
+	// TODO: Better type for fsm.
+	void setFsm(void* fsm)
+	{
+		state.setFsm(fsm);
+	}
+	State state;
+};
+
+namespace detail {
+template <class T, class Tuple, std::size_t... I>
+constexpr T make_from_tuple_impl( Tuple&& t, std::index_sequence<I...> )
+{
+  return T(std::get<I>(std::forward<Tuple>(t))...);
+}
+
+template <class T, class Storage, class Tuple, std::size_t... I>
+constexpr T* place_new_from_tuple_impl( Storage mem, Tuple&& t, std::index_sequence<I...> )
+{
+  return new (mem) T(std::get<I>(std::forward<Tuple>(t))...);
+}
+} // namespace detail
+
+template <class T, class Storage, class Tuple>
+constexpr T* place_new_from_tuple( Storage mem, Tuple&& t )
+{
+    return detail::place_new_from_tuple_impl<T>(mem, std::forward<Tuple>(t),
+        std::make_index_sequence<std::tuple_size_v<std::remove_reference_t<Tuple>>>{});
+}
+
+// Create a functor to construct state instances using placement new.
+template<typename State, typename Event, typename ...Args>
+class Maker
+{
+public:
+	Maker(Args ... args) : arg(args...) {};
+
+	template<typename Storage>
+	ModelIface<Event>* operator()(Storage mem)
+	{
+		return static_cast<ModelIface<Event>*>(place_new_from_tuple<Model<State, Event>>( mem, arg ));
+	}
+private:
+	std::tuple<Args...> arg;
+};
+
+
 
 /**
  * The statechart module implement a hierarchical state machine. (Fsm)

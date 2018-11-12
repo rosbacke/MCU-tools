@@ -11,8 +11,10 @@
 
 #include <string>
 
-using std::cout;
-using std::endl;
+//using std::cout;
+//using std::endl;
+
+using namespace std;
 
 struct RootState
 {};
@@ -130,7 +132,7 @@ TEST(StateChart, testStateChart2)
     EXPECT_EQ(fsms.stateNo, 5);
     EXPECT_EQ(fsms.index2Id[0], SId::root);
     EXPECT_EQ(fsms.index2Id[1], SId::state1);
-    EXPECT_EQ(fsms.index2Id[2], SId::state2); // ??
+    EXPECT_EQ(fsms.index2Id[2], SId::state2);
     EXPECT_EQ(fsms.index2Id[3], SId::state3);
     EXPECT_EQ(fsms.index2Id[4], SId::state4);
 
@@ -148,6 +150,52 @@ TEST(StateChart, testStateChart2)
 
     EXPECT_EQ(fsms.maxLevel, 2);
     EXPECT_EQ(fsms.maxStackSize, 3);
+}
+
+// Test maker function. Make sure we can build states using the Maker class.
+TEST(StateChart, testMaker)
+{
+	struct TEvent
+	{
+		int e;
+	};
+
+	struct STest
+	{
+		STest(int i_, double j_, std::string s_) : i(i_), j(j_), s(s_) {}
+		int i;
+		double j;
+		std::string s;
+
+		bool event(const TEvent& e)
+		{
+			return i == e.e;
+		}
+		~STest()
+		{
+			i = 10;
+		}
+	};
+
+
+	Maker<STest, TEvent, int, double, string> maker(4, 5.0, "rewq");
+
+	aligned_storage_t<sizeof (Model<STest, TEvent>)> storage[1];
+
+	auto i = maker(storage);
+
+	// The maker does an placement new on the storage. Hence there should
+	// be a proper Model object in our storage.
+	EXPECT_EQ(static_cast<void*>(i), static_cast<void*>(storage));
+	auto* t = static_cast<Model<STest, TEvent>*>(static_cast<void*>(storage));
+
+	EXPECT_EQ(t->state.i, 4);
+	EXPECT_EQ(t->state.j, 5.0);
+	EXPECT_EQ(t->state.s, "rewq");
+	t->~Model<STest, TEvent>();
+
+	//Note: suspicious. Prob. UB.
+	EXPECT_EQ(t->state.i, 10);
 }
 
 int

@@ -35,8 +35,12 @@ Additional data of interest, but not yet solved:
 - For a given level, determine the largest state class to get needed memory.
 - Given some identifier of a state, find the right index into the array.
 
-Outstanding questions: What kind of identiier should we use?
-- One option : enum.
+Outstanding questions: What kind of identifier should we use?
+- Currently using external enum. It is a target for 'transition' calls.
+
+Do note that this opens up the possibility to use the same class for
+several states. To effectively use this we need to pass different 
+constructor arguments to the different states.
 
 Main use is for the 'transition'. To jump within the state machine upon events.
 Also: Identify init state.
@@ -51,8 +55,37 @@ Assume we are using the enum variant.
 - When doing a transition we should be able to derive the direct id at compile time.
 - For runtime support, will probably a table. Or runtime search or maybe compile
   time translation and then storage of indexes in an opaque type.
+
+
+
+State class interface:
+- Currently using 'fsmBase' pointer passed through to base class. It allows
+  the base class to offer access to 'transition', 'fsm class' etc.
+
+- Would be good to have another way to pass this point in. Would free up
+  constructors for user supplied data.
+
+Alternative:
+- Duck typing an interface. Assuming the state function has a 'set' function to be 
+  called upon construction.
+- Downside: Can't access this data during object construction.
+  - Alternative: Have some method för the user maker function to access this,
+    then the user can opt in to pass it ito the state constructor.
+
+- Already got the event requirement. Another function for setting the fsm is 
+  straight forward. Can pass the state id this way also.
+- Maker function needed to build the class. Runtime setting of stateId. Can make
+  it statically via template class. It means specifying template argument when
+  setting up FSM structure.
+
+- Need to supply a Maker function. The default maker default construct the class
+  in place. (Note on alignment. C++17 got __STDCPP_DEFAULT_NEW_ALIGNMENT__.
+  It is the default alignment from system new operator. test show '16' for linux)
+- Give make function as 3:rd (template) argument. 
+- The make function must follow some protocol to allow picking up pointer to memory
+  and 
   
-- 
+  
 
 
 
