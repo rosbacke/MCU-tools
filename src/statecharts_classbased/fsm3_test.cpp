@@ -21,7 +21,11 @@ struct RootState
 
 // General State structs. Template to save typing.
 template<int i>
-struct S;
+struct S
+{
+	// A few different sizes.
+	int32_t data[ i ];
+};
 
 enum class SId
 {
@@ -32,7 +36,28 @@ enum class SId
 	state4
 };
 
+struct TestEvent
+{
+	int32_t val;
+};
+
 using namespace std;
+
+// Base case with a root node and 2 normal states.
+TEST(StateChart, testModel)
+{
+	EXPECT_EQ(sizeof(S<1>), 4);
+	EXPECT_EQ(sizeof(S<2>), 8);
+	EXPECT_EQ(sizeof(S<3>), 12);
+	EXPECT_EQ(sizeof(S<4>), 16);
+
+	// Model contain vptr + align to 8 bytes.
+	EXPECT_EQ(sizeof(Model<S<1>, TestEvent>), 16);
+	EXPECT_EQ(sizeof(Model<S<2>, TestEvent>), 16);
+	EXPECT_EQ(sizeof(Model<S<3>, TestEvent>), 24);
+	EXPECT_EQ(sizeof(Model<S<4>, TestEvent>), 24);
+}
+
 
 // Base case with a root node and 2 normal states.
 TEST(StateChart, testStateChart)
@@ -70,7 +95,7 @@ TEST(StateChart, testStateChart)
     EXPECT_EQ(SubNode1::subStateNo, 0);
     EXPECT_EQ(SubNode1::id, SId::state2);
 
-    FsmStatic<RootNode> fsms;
+    FsmStatic<RootNode, TestEvent> fsms;
 
     EXPECT_EQ(fsms.maxLevels, 2);
     EXPECT_EQ(fsms.stateNo, 3);
@@ -87,6 +112,12 @@ TEST(StateChart, testStateChart)
     EXPECT_EQ(fsms.levelIndex[2], 1);
 
     EXPECT_EQ(fsms.maxLevels, 2);
+
+    // Rootnode empty class. But will require alignment 8 + vptr 8.
+    EXPECT_EQ(fsms.levels.maxStorageSize[0], 16);
+
+    // Both state 1 & 2 fit in 8 bytes. Vptr 8.
+    EXPECT_EQ(fsms.levels.maxStorageSize[1], 16);
 }
 
 
@@ -131,7 +162,7 @@ TEST(StateChart, testStateChart2)
     EXPECT_EQ(SubNode1::id, SId::state4);
     EXPECT_EQ(SubNode1::maxheight, 0);
 
-    FsmStatic<RootNode> fsms;
+    FsmStatic<RootNode, TestEvent> fsms;
 
     EXPECT_EQ(fsms.stateNo, 5);
     EXPECT_EQ(fsms.index2Id[0], SId::root);
@@ -153,6 +184,20 @@ TEST(StateChart, testStateChart2)
     EXPECT_EQ(fsms.levelIndex[4], 1);
 
     EXPECT_EQ(fsms.maxLevels, 3);
+
+    // Rootnode empty class. But will require alignment 8 + vptr 8.
+    EXPECT_EQ(fsms.levels.maxStorageSize[0], 16);
+
+    // State 3 req. 16 bytes + vptr.
+    EXPECT_EQ(fsms.levels.maxStorageSize[1], 24);
+
+    // State 3 req. 16 bytes + vptr.
+    EXPECT_EQ(fsms.levels.maxStorageSize[2], 24);
+
+    EXPECT_EQ(fsms.levels.storageOffset[0], 0);
+    EXPECT_EQ(fsms.levels.storageOffset[1], 16);
+    EXPECT_EQ(fsms.levels.storageOffset[2], 40);
+    EXPECT_EQ(fsms.levels.storageOffset[3], 64);
 }
 
 // Test maker function. Make sure we can build states using the Maker class.

@@ -14,6 +14,12 @@
 template<typename State, typename Event, typename ...Args>
 class Maker;
 
+template<typename Event_>
+struct EventTag
+{
+	using Event = Event_;
+};
+
 template<class Event>
 class ModelIface
 {
@@ -23,7 +29,7 @@ public:
 };
 
 template<typename State_, typename Event_>
-class Model : public ModelIface<Event_>
+class Model final : public ModelIface<Event_>
 {
 public:
 	using Event = Event_;
@@ -83,6 +89,7 @@ struct StateIndex
 template<typename State, typename ...Nodes>
 class FsmNode;
 
+// Helper class to calculate max using fold expression.
 struct MaxOp
 {
 	explicit MaxOp(size_t val_) : val(val_) {}
@@ -143,11 +150,11 @@ struct TraverseNodes
 		TraverseNodes<Node>::writeParentIndex(parentArray, baseOffset, parent);
 		TraverseNodes<Nodes...>::writeParentIndex(parentArray, baseOffset + Node::area, parent);
 	}
-	template<typename Array, typename StoreArray>
-	static constexpr size_t writeLevelIndex(Array& levelArray, StoreArray& sArray, StateIndex baseOffset, size_t level)
+	template<typename EventTag_, typename Array, typename StoreArray>
+	static constexpr size_t writeLevelIndex(EventTag_ et, Array& levelArray, StoreArray& sArray, StateIndex baseOffset, size_t level)
 	{
-		auto t1 = TraverseNodes<Node>::writeLevelIndex(levelArray, sArray, baseOffset, level);
-		auto t2 = TraverseNodes<Nodes...>::writeLevelIndex(levelArray, sArray, baseOffset + Node::area, level);
+		auto t1 = TraverseNodes<Node>::writeLevelIndex(et, levelArray, sArray, baseOffset, level);
+		auto t2 = TraverseNodes<Nodes...>::writeLevelIndex(et, levelArray, sArray, baseOffset + Node::area, level);
 		return t1 < t2 ? t2 : t1;
 	}
 
@@ -181,12 +188,12 @@ struct TraverseNodes<State<id_, StateType_>>
 	{
 		parentArray[ baseOffset.get() ] = parent;
 	}
-	template<typename Array, typename StoreArray>
-	static constexpr size_t writeLevelIndex(Array& levelArray, StoreArray& sArray, StateIndex baseOffset, size_t level)
+	template<typename EventTag_, typename Array, typename StoreArray>
+	static constexpr size_t writeLevelIndex(EventTag_ et, Array& levelArray, StoreArray& sArray, StateIndex baseOffset, size_t level)
 	{
 		levelArray[ baseOffset.get() ] = level;
 		auto t = sArray[ level ];
-		sArray[ level ] = t; //std::max(t, sizeof );
+		sArray[ level ] = std::max(t, sizeof (Model<StateType_, typename EventTag_::Event>));
 		return level;
 	}
 
@@ -219,13 +226,13 @@ struct TraverseNodes<FsmNode<State, Nodes...>>
 		TraverseNodes<Nodes...>::writeParentIndex(parentArray, baseOffset + 1ul, baseOffset);
 	}
 
-	template<typename Array, typename StoreArray>
-	static constexpr size_t writeLevelIndex(Array& levelArray, StoreArray& sArray, StateIndex baseOffset, size_t level)
+	template<typename EventTag_, typename Array, typename StoreArray>
+	static constexpr size_t writeLevelIndex(EventTag_ et, Array& levelArray, StoreArray& sArray, StateIndex baseOffset, size_t level)
 	{
 		levelArray[ baseOffset.get() ] = level;
-		auto t = sArray[  baseOffset.get() ];
-		sArray[ level ] = t; //std::max(t, sizeof );
-		return TraverseNodes<Nodes...>::writeLevelIndex(levelArray, sArray, baseOffset + 1ul, level + 1);
+		auto t = sArray[  level ];
+		sArray[ level ] = std::max(t, sizeof (Model<typename State::StateType, typename EventTag_::Event>));
+		return TraverseNodes<Nodes...>::writeLevelIndex(et, levelArray, sArray, baseOffset + 1ul, level + 1);
 	}
 };
 
@@ -245,6 +252,7 @@ public:
   static constexpr StateId id = State::id;
 
   using StateType = typename State::StateType;
+  //using Model = Model<StateType, State
 
   // Offset for a child into the linear storage.
   static constexpr StateIndex childOffset(size_t childIndex)
@@ -263,7 +271,7 @@ public:
 };
 
 // Static setup for the FSM stateschart
-template<typename Root>
+template<typename Root, typename Event_>
 class FsmStatic
 {
 public:
@@ -275,19 +283,39 @@ public:
 	using BuilderFkn = void (*)(char*, int);
 	using StateId = typename Root::StateId;
 
-	struct Level {
+	struct Level
+	{
+		// Given a state index return the level of the state. 0->root state.
 		std::array<size_t, stateNo> levelIndex = {};
+
+		// Given a state index return the index to the parent.
 		std::array<StateIndex, stateNo> parentIndex = {};
+
+		// Translation from index to stateId.
 		std::array<StateId, stateNo> index2Id = {};
+
+		// Maximum storage needed to store any state (and Model) within a level.
 		std::array<size_t, maxLevels> maxStorageSize = {};
+
+		// Offset into a linear storage to construct states for given levels.
+		// Last element contain total storage needed.
+		std::array<size_t, maxLevels + 1> storageOffset = {};
 	};
 
 	static auto constexpr initLevels()-> Level
 	{
 		Level res;
-		TraverseNodes<Root>::writeLevelIndex(res.levelIndex, res.maxStorageSize, StateIndex(0), 0);
+		TraverseNodes<Root>::writeLevelIndex(EventTag<Event_>{}, res.levelIndex, res.maxStorageSize, StateIndex(0), 0);
 		TraverseNodes<Root>::writeParentIndex(res.parentIndex, StateIndex(0), StateIndex(0));
 		TraverseNodes<Root>::writeIndex2Id(res.index2Id, StateIndex(0));
+
+		res.storageOffset[0] = 0;
+		for (auto i=1; i<res.storageOffset.size(); ++i)
+		{
+			res.storageOffset[i] = res.storageOffset[i - 1] + res.maxStorageSize[i - 1];
+		}
+		std::array<size_t, maxLevels> stateOffset = {};
+
 		return res;
 	}
 
@@ -302,14 +330,8 @@ public:
 	// Given a state index return the index to the parent.
 	static constexpr const std::array<StateIndex, stateNo>& parentIndex = levels.parentIndex;
 
-	// Given a state index return the index to the parent.
+	// Given a state index return the level of the state. 0->root state.
 	static constexpr const std::array<size_t, stateNo>& levelIndex = levels.levelIndex;
-
-	// Maximum depth of the FSM.
-	static constexpr const size_t maxLevel = levels.maxLevel;
-
-	// Storage depth for a state stack. (includes the root state).
-	// static constexpr const size_t maxStackSize = levels.maxLevel + 1;
 };
 
 namespace detail {

@@ -85,11 +85,6 @@ Alternative:
 - The make function must follow some protocol to allow picking up pointer to memory
   and 
   
-  
-
-
-
-
 
 Can be done by these stages:
 A struct Wrap that handle the diffence between class S(x) and Base1 as arguments above.
