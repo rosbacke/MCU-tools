@@ -11,17 +11,54 @@
 #include <array>
 #include <tuple>
 
+template<typename State, typename Event, typename ...Args>
+class Maker;
+
+template<class Event>
+class ModelIface
+{
+public:
+	virtual bool event(const Event& e)=0;
+	virtual ~ModelIface() {};
+};
+
+template<typename State_, typename Event_>
+class Model : public ModelIface<Event_>
+{
+public:
+	using Event = Event_;
+	using State = State_;
+
+	template<typename ...Args>
+	explicit Model(Args... args) : state(args...)
+	{}
+
+	bool event(const Event& e) override
+	{
+		return state.event(e);
+	}
+
+	// TODO: Better type for fsm.
+	void setFsm(void* fsm)
+	{
+		state.setFsm(fsm);
+	}
+	State state;
+};
+
 // Collector class of a State type and the identifier.
-template<typename StateType_, auto id_>
+template<auto id_, typename StateType_, typename Maker_ = Maker<StateType_, int>>
 class State
 {
 public:
 	using StateId = decltype(id_);
 	using StateType = StateType_;
+	using Maker = Maker_;
 	static constexpr StateId id = id_;
 	static constexpr size_t area = 1;
 	enum {
-	    subStateNo = 0
+	    subStateNo = 0,
+		maxheight = 0
 	};
 };
 
@@ -46,17 +83,27 @@ struct StateIndex
 template<typename State, typename ...Nodes>
 class FsmNode;
 
-// A node in the area calculation tree.
-template<typename State, typename ...Nodes>
-class FsmArea;
+struct MaxOp
+{
+	explicit MaxOp(size_t val_) : val(val_) {}
+	MaxOp operator^(MaxOp mb)
+	{
+		return MaxOp(std::max(val, mb.val));
+	}
+	size_t val = 0;
+};
 
 template<typename State, typename ...Nodes>
 class FsmArea
 {
 public:
   enum {
+	// Number of sub states for this particular node.
     // Note: fold expression (C++17)
-    subStateNo = sizeof...(Nodes)
+    subStateNo = sizeof...(Nodes),
+
+	// Reciprocal value of the level
+	maxheight = 1 + (... ^ Nodes::maxheight)
   };
   static constexpr size_t area = 1 + (... + Nodes::area);
 };
@@ -79,13 +126,6 @@ struct SubTypeImpl
   using Result = typename SubTypeImpl<index-1, Nodes...>::Result;
 };
 
-template<typename Node, typename ...Nodes>
-struct TraverseNodes;
-
-template<typename ...N>
-struct SubNodes_
-{};
-
 // Helper struct to implement recursive functions on the FsmNode graph.
 template<typename Node, typename ...Nodes>
 struct TraverseNodes
@@ -103,11 +143,11 @@ struct TraverseNodes
 		TraverseNodes<Node>::writeParentIndex(parentArray, baseOffset, parent);
 		TraverseNodes<Nodes...>::writeParentIndex(parentArray, baseOffset + Node::area, parent);
 	}
-	template<typename Array>
-	static constexpr size_t writeLevelIndex(Array& levelArray, StateIndex baseOffset, size_t level)
+	template<typename Array, typename StoreArray>
+	static constexpr size_t writeLevelIndex(Array& levelArray, StoreArray& sArray, StateIndex baseOffset, size_t level)
 	{
-		auto t1 = TraverseNodes<Node>::writeLevelIndex(levelArray, baseOffset, level);
-		auto t2 = TraverseNodes<Nodes...>::writeLevelIndex(levelArray, baseOffset + Node::area, level);
+		auto t1 = TraverseNodes<Node>::writeLevelIndex(levelArray, sArray, baseOffset, level);
+		auto t2 = TraverseNodes<Nodes...>::writeLevelIndex(levelArray, sArray, baseOffset + Node::area, level);
 		return t1 < t2 ? t2 : t1;
 	}
 
@@ -127,8 +167,8 @@ struct TraverseNodes
 	}
 };
 
-template<typename StateType_, auto id_>
-struct TraverseNodes<State<StateType_, id_>>
+template<auto id_, typename StateType_>
+struct TraverseNodes<State<id_, StateType_>>
 {
 	template<typename Array>
 	static constexpr void writeIndex2Id(Array& array, StateIndex baseOffset)
@@ -141,10 +181,12 @@ struct TraverseNodes<State<StateType_, id_>>
 	{
 		parentArray[ baseOffset.get() ] = parent;
 	}
-	template<typename Array>
-	static constexpr size_t writeLevelIndex(Array& levelArray, StateIndex baseOffset, size_t level)
+	template<typename Array, typename StoreArray>
+	static constexpr size_t writeLevelIndex(Array& levelArray, StoreArray& sArray, StateIndex baseOffset, size_t level)
 	{
 		levelArray[ baseOffset.get() ] = level;
+		auto t = sArray[ level ];
+		sArray[ level ] = t; //std::max(t, sizeof );
 		return level;
 	}
 
@@ -174,19 +216,16 @@ struct TraverseNodes<FsmNode<State, Nodes...>>
 	static constexpr void writeParentIndex(Array& parentArray, StateIndex baseOffset, StateIndex parent)
 	{
 		parentArray[ baseOffset.get() ] = parent;
-		// Note: This temporary seems to be needed to avoid miscalculating the indexes.
-		// It sure looks like a compiler bug...
-		// At the same time, same behavior in clang-6/gcc-8
-		const StateIndex bo = baseOffset;
-		// TraverseNodes<Nodes...>::writeParentIndex(parentArray, baseOffset + 1ul, baseOffset);
-		TraverseNodes<Nodes...>::writeParentIndex(parentArray, bo + 1ul, bo);
+		TraverseNodes<Nodes...>::writeParentIndex(parentArray, baseOffset + 1ul, baseOffset);
 	}
 
-	template<typename Array>
-	static constexpr size_t writeLevelIndex(Array& levelArray, StateIndex baseOffset, size_t level)
+	template<typename Array, typename StoreArray>
+	static constexpr size_t writeLevelIndex(Array& levelArray, StoreArray& sArray, StateIndex baseOffset, size_t level)
 	{
 		levelArray[ baseOffset.get() ] = level;
-		return TraverseNodes<Nodes...>::writeLevelIndex(levelArray, baseOffset + 1ul, level + 1);
+		auto t = sArray[  baseOffset.get() ];
+		sArray[ level ] = t; //std::max(t, sizeof );
+		return TraverseNodes<Nodes...>::writeLevelIndex(levelArray, sArray, baseOffset + 1ul, level + 1);
 	}
 };
 
@@ -196,10 +235,10 @@ class FsmNode
 public:
   using State = State_;
   using Node = FsmNode<State, Nodes...>;
-  using SubNodes = SubNodes_<Nodes...>;
 
   enum {
     area = FsmArea<State, Nodes...>::area,
+	maxheight = FsmArea<State, Nodes...>::maxheight,
     subStateNo = FsmArea<State, Nodes...>::subStateNo,
   };
   using StateId = typename State::StateId;
@@ -231,53 +270,37 @@ public:
 
 	// Total number of states.
 	static const constexpr std::size_t stateNo = Root::area;
+	static const constexpr std::size_t maxLevels = Root::maxheight + 1;
 
 	using BuilderFkn = void (*)(char*, int);
 	using StateId = typename Root::StateId;
 
-	static auto constexpr initIndex2Id()-> std::array<StateId, stateNo>
-	{
-		std::array<StateId, stateNo> res = {};
-		TraverseNodes<Root>::writeIndex2Id(res, StateIndex(0));
-		return res;
-	}
-	static auto constexpr initParentIndex()-> std::array<StateIndex, stateNo>
-	{
-		std::array<StateIndex, stateNo> res;
-		for(auto& i : res) i = StateIndex(0xff); // For debug.
-		TraverseNodes<Root>::writeParentIndex(res, StateIndex(0), StateIndex(0));
-		return res;
-	}
-
 	struct Level {
-		size_t maxLevel = 0;
 		std::array<size_t, stateNo> levelIndex = {};
+		std::array<StateIndex, stateNo> parentIndex = {};
+		std::array<StateId, stateNo> index2Id = {};
+		std::array<size_t, maxLevels> maxStorageSize = {};
 	};
 
 	static auto constexpr initLevels()-> Level
 	{
 		Level res;
-		// for(auto& i : res.levelIndex) i = 0xff; // For debug.
-		res.maxLevel = TraverseNodes<Root>::writeLevelIndex(res.levelIndex, StateIndex(0), 0);
+		TraverseNodes<Root>::writeLevelIndex(res.levelIndex, res.maxStorageSize, StateIndex(0), 0);
+		TraverseNodes<Root>::writeParentIndex(res.parentIndex, StateIndex(0), StateIndex(0));
+		TraverseNodes<Root>::writeIndex2Id(res.index2Id, StateIndex(0));
 		return res;
-	}
-
-	static auto constexpr initId2Builder()-> std::array<BuilderFkn, stateNo>
-	{
-		return {};
 	}
 
 	static constexpr const Level levels = initLevels();
 
 	//
-	static constexpr const std::array<BuilderFkn, stateNo> id2Builder = initId2Builder();
+	// static constexpr const std::array<BuilderFkn, stateNo> id2Builder = initId2Builder();
 
 	// Translation from index to stateId.
-	static constexpr const std::array<StateId, stateNo> index2Id = initIndex2Id();
+	static constexpr const std::array<StateId, stateNo>& index2Id = levels.index2Id;
 
 	// Given a state index return the index to the parent.
-	static constexpr const std::array<StateIndex, stateNo> parentIndex = initParentIndex();
-
+	static constexpr const std::array<StateIndex, stateNo>& parentIndex = levels.parentIndex;
 
 	// Given a state index return the index to the parent.
 	static constexpr const std::array<size_t, stateNo>& levelIndex = levels.levelIndex;
@@ -286,45 +309,10 @@ public:
 	static constexpr const size_t maxLevel = levels.maxLevel;
 
 	// Storage depth for a state stack. (includes the root state).
-	static constexpr const size_t maxStackSize = levels.maxLevel + 1;
-};
-
-template<class Event>
-class ModelIface
-{
-public:
-	virtual bool event(const Event& e)=0;
-};
-
-
-template<typename State, typename Event>
-class Model : public ModelIface<Event>
-{
-public:
-	template<typename ...Args>
-	explicit Model(Args... args) : state(args...)
-	{}
-
-	bool event(const Event& e) override
-	{
-		return state.event(e);
-	}
-
-	// TODO: Better type for fsm.
-	void setFsm(void* fsm)
-	{
-		state.setFsm(fsm);
-	}
-	State state;
+	// static constexpr const size_t maxStackSize = levels.maxLevel + 1;
 };
 
 namespace detail {
-template <class T, class Tuple, std::size_t... I>
-constexpr T make_from_tuple_impl( Tuple&& t, std::index_sequence<I...> )
-{
-  return T(std::get<I>(std::forward<Tuple>(t))...);
-}
-
 template <class T, class Storage, class Tuple, std::size_t... I>
 constexpr T* place_new_from_tuple_impl( Storage mem, Tuple&& t, std::index_sequence<I...> )
 {

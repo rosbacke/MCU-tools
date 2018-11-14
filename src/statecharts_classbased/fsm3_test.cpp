@@ -40,14 +40,15 @@ TEST(StateChart, testStateChart)
     cout << "start" << endl;
 
     // Vanilla FSM. Can declare a root node.
-    using RootNode = FsmNode<State<RootState, SId::root>,
-    		State<S<1>, SId::state1>,
-			State<S<2>, SId::state2>
+    using RootNode = FsmNode<State<SId::root, RootState>,
+    		State<SId::state1, S<1>>,
+			State<SId::state2, S<2>>
     >;
 
     EXPECT_EQ(RootNode::area, 3);
     EXPECT_EQ(RootNode::subStateNo, 2);
     EXPECT_EQ(RootNode::id, SId::root);
+    EXPECT_EQ(RootNode::maxheight, 1);
 
     // Run time function variants.
     EXPECT_EQ(RootNode::childOffset(0), 1);
@@ -62,6 +63,7 @@ TEST(StateChart, testStateChart)
     EXPECT_EQ(SubNode0::area, 1);
     EXPECT_EQ(SubNode0::subStateNo, 0);
     EXPECT_EQ(SubNode0::id, SId::state1);
+    EXPECT_EQ(SubNode0::maxheight, 0);
 
     using SubNode1 = RootNode::SubType<1>;
     EXPECT_EQ(SubNode1::area, 1);
@@ -70,7 +72,7 @@ TEST(StateChart, testStateChart)
 
     FsmStatic<RootNode> fsms;
 
-
+    EXPECT_EQ(fsms.maxLevels, 2);
     EXPECT_EQ(fsms.stateNo, 3);
     EXPECT_EQ(fsms.index2Id[0], SId::root);
     EXPECT_EQ(fsms.index2Id[1], SId::state1);
@@ -84,8 +86,7 @@ TEST(StateChart, testStateChart)
     EXPECT_EQ(fsms.levelIndex[1], 1);
     EXPECT_EQ(fsms.levelIndex[2], 1);
 
-    EXPECT_EQ(fsms.maxLevel, 1);
-    EXPECT_EQ(fsms.maxStackSize, 2);
+    EXPECT_EQ(fsms.maxLevels, 2);
 }
 
 
@@ -94,19 +95,20 @@ TEST(StateChart, testStateChart2)
 {
 
     // Vanilla FSM. Can declare a root node.
-    using SubNode = FsmNode<State<S<1>, SId::state1>,
-    		State<S<2>, SId::state2>,
-			State<S<3>, SId::state3>
+    using SubNode = FsmNode<State<SId::state1, S<1>>,
+    		State<SId::state2, S<2>>,
+			State<SId::state3, S<3>>
     >;
 
-    using RootNode = FsmNode<State<RootState, SId::root>,
+    using RootNode = FsmNode<State<SId::root, RootState>,
     		SubNode,
-			State<S<4>, SId::state4>
+			State<SId::state4, S<4>>
     >;
 
     EXPECT_EQ(RootNode::area, 5);
     EXPECT_EQ(RootNode::subStateNo, 2);
     EXPECT_EQ(RootNode::id, SId::root);
+    EXPECT_EQ(RootNode::maxheight, 2);
 
     // Run time function variants.
     EXPECT_EQ(RootNode::childOffset(0), 1);
@@ -121,11 +123,13 @@ TEST(StateChart, testStateChart2)
     EXPECT_EQ(SubNode0::area, 3);
     EXPECT_EQ(SubNode0::subStateNo, 2);
     EXPECT_EQ(SubNode0::id, SId::state1);
+    EXPECT_EQ(SubNode0::maxheight, 1);
 
     using SubNode1 = RootNode::SubType<1>;
     EXPECT_EQ(SubNode1::area, 1);
     EXPECT_EQ(SubNode1::subStateNo, 0);
     EXPECT_EQ(SubNode1::id, SId::state4);
+    EXPECT_EQ(SubNode1::maxheight, 0);
 
     FsmStatic<RootNode> fsms;
 
@@ -148,8 +152,7 @@ TEST(StateChart, testStateChart2)
     EXPECT_EQ(fsms.levelIndex[3], 2);
     EXPECT_EQ(fsms.levelIndex[4], 1);
 
-    EXPECT_EQ(fsms.maxLevel, 2);
-    EXPECT_EQ(fsms.maxStackSize, 3);
+    EXPECT_EQ(fsms.maxLevels, 3);
 }
 
 // Test maker function. Make sure we can build states using the Maker class.
