@@ -386,21 +386,25 @@ struct FsmStorage
 {
 public:
 	using FS = FsmStatic_;
-	using Storage = typename std::aligned_storage<FS::levels.storageOffset[FS::maxLevels],
-			alignof(typename FS::AlignedStorageType)>::type;
-	Storage storage[1];
-	constexpr char* begin() { return static_cast<char*>(static_cast<void*>(&storage[0])); }
+
+	struct alignas(alignof(typename FS::AlignedStorageType)) Storage
+	{
+		char data[ FS::levels.storageOffset[FS::maxLevels] ];
+	};
+	Storage storage;
+
+	constexpr char* begin() { return &storage.data[0]; }
 	constexpr char* end()
 	{
-		return begin() + FS::levels.storageOffset[ FS::maxLevels ];
+		return begin() + sizeof storage.data;
 	}
-	constexpr char* operator[](int i)
+	constexpr char* operator[](std::size_t i)
 	{
 		return begin() + FS::levels.storageOffset[i];
 	}
 	constexpr size_t size() const
 	{
-		return sizeof storage;
+		return sizeof storage.data;
 	}
 };
 
@@ -420,6 +424,7 @@ public:
 
 private:
 	FsmStorage<FsmS> storage;
+	StateIndex currentState;
 };
 
 #endif /* SRC_STATECHART_STATECHART_H_ */
