@@ -11,6 +11,7 @@
 #include <array>
 #include <tuple>
 #include <memory>
+#include <algorithm>
 
 template<typename State, typename Event, typename ...Args>
 class Maker;
@@ -53,6 +54,7 @@ public:
 	State state;
 };
 
+
 // Collector class of a State type and the identifier.
 template<auto id_, typename StateType_, typename Maker_ = Maker<StateType_, int>>
 class State
@@ -84,11 +86,13 @@ struct StateIndex
 	{ StateIndex t(index + i); return t; }
 	constexpr bool operator==(int i) const
 	{ return index == i; }
+	constexpr bool operator==(StateIndex i) const
+	{ return index == i.index; }
 
 	std::size_t index = 0;
 };
 
-static const constexpr StateIndex voidIndex{static_cast<std::size_t>(-1)};
+static const constexpr StateIndex voidIndex{static_cast<std::size_t>(0)};
 
 // A Node in the FSM tree.
 template<typename State, typename ...Nodes>
@@ -347,6 +351,15 @@ public:
 
 	// Given a state index return the level of the state. 0->root state.
 	static constexpr const std::array<size_t, stateNo>& levelIndex = levels.levelIndex;
+
+	static constexpr StateIndex findState(StateId id)
+	{
+		auto t = std::find(levels.index2Id.begin(), levels.index2Id.end(), id);
+		if (t == levels.index2Id.end())
+			return voidIndex;
+		else
+			return StateIndex(t - levels.index2Id.begin());
+	}
 };
 
 namespace detail {
@@ -432,18 +445,25 @@ public:
 		return FsmS::levels.index2Id[ activeState_.get() ];
 	}
 
+	constexpr void transition(StateId newState)
+	{
+		nextState_ = FsmS::findState(newState);
+	}
+
 	template<StateId newState>
 	void transition()
 	{
-
+		transition(newState);
 	}
+
 
 
 private:
 	FsmStorage<FsmS> storage;
 
 	// Use root state index to signal 'not a state'.
-	StateIndex activeState_ = voidIndex;;
+	StateIndex activeState_ = voidIndex;
+	StateIndex nextState_ = voidIndex;
 };
 
 #endif /* SRC_STATECHART_STATECHART_H_ */

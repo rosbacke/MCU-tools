@@ -282,14 +282,23 @@ TEST(StateChart, testFsm)
 	};
     // Vanilla FSM. Can declare a root node.
     using RootNode = FsmNode<State<SId::root, RootState>,
-    		State<SId::state1, S<1>>,
-			State<SId::state2, S<2>>
+    		State<SId::state2, S<2>>,
+			State<SId::state1, S<1>>
     >;
 
     Fsm<RootNode, TEvent> fsm;
+    EXPECT_EQ(fsm.currentState(), SId::root);
+
+    using FsmS = FsmStatic<RootNode, TEvent>;
+    EXPECT_EQ(FsmS::findState(SId::root), StateIndex(0));
+    EXPECT_EQ(FsmS::findState(SId::state1), StateIndex(2));
+    EXPECT_EQ(FsmS::findState(SId::state2), StateIndex(1));
+
     fsm.post(TEvent{0});
 
 }
+
+
 int
 main(int ac, char* av[])
 {
