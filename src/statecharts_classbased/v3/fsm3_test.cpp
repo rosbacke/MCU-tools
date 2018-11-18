@@ -62,8 +62,6 @@ TEST(StateChart, testModel)
 // Base case with a root node and 2 normal states.
 TEST(StateChart, testStateChart)
 {
-    cout << "start" << endl;
-
     // Vanilla FSM. Can declare a root node.
     using RootNode = FsmNode<State<SId::root, RootState>,
     		State<SId::state1, S<1>>,
@@ -246,6 +244,52 @@ TEST(StateChart, testMaker)
 	EXPECT_EQ(t->state.i, 10);
 }
 
+TEST(StateChart, testAlignment)
+{
+	struct TEvent
+	{
+		int e;
+	};
+    // Vanilla FSM. Can declare a root node.
+    using RootNode = FsmNode<State<SId::root, RootState>,
+    		State<SId::state1, S<1>>,
+			State<SId::state2, S<3>>
+    >;
+
+    using FsmS = FsmStatic<RootNode, TEvent>;
+    // Assuming 8 byte alignment for natural alignment.
+    EXPECT_EQ(FsmS::addAlignment(0), 0);
+    EXPECT_EQ(FsmS::addAlignment(1), 8);
+    EXPECT_EQ(FsmS::addAlignment(7), 8);
+    EXPECT_EQ(FsmS::addAlignment(8), 8);
+    EXPECT_EQ(FsmS::addAlignment(9), 16);
+    EXPECT_EQ(FsmS::addAlignment(16), 16);
+
+    FsmStorage<FsmS> storage;
+    // Root req 8 + 8 = 16 bytes, S<3> req 12 -> 16 + 8 = 24 bytes.
+    EXPECT_EQ(storage.size(), 16 + 24); // Root and State require 16 bytes each.
+
+    // Should be able to do placement new into the storage.
+    int *val_p = new (storage.begin()) int(123);
+    EXPECT_EQ(*val_p, 123);
+}
+
+TEST(StateChart, testFsm)
+{
+	struct TEvent
+	{
+		int e;
+	};
+    // Vanilla FSM. Can declare a root node.
+    using RootNode = FsmNode<State<SId::root, RootState>,
+    		State<SId::state1, S<1>>,
+			State<SId::state2, S<2>>
+    >;
+
+    Fsm<RootNode, TEvent> fsm;
+    fsm.post(TEvent{0});
+
+}
 int
 main(int ac, char* av[])
 {

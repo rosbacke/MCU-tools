@@ -10,6 +10,7 @@
 
 #include <array>
 #include <tuple>
+#include <memory>
 
 template<typename State, typename Event, typename ...Args>
 class Maker;
@@ -283,6 +284,9 @@ public:
 	using BuilderFkn = void (*)(char*, int);
 	using StateId = typename Root::StateId;
 
+	// Determine the alignment that will be used for constructing states.
+	struct alignas(8) AlignedStorageType {};
+
 	struct Level
 	{
 		// Given a state index return the level of the state. 0->root state.
@@ -302,6 +306,12 @@ public:
 		std::array<size_t, maxLevels + 1> storageOffset = {};
 	};
 
+	static constexpr size_t addAlignment(size_t requiredStorage)
+	{
+		std::size_t alignValue{alignof(AlignedStorageType)};
+		return (requiredStorage + alignValue - 1) & (~(alignValue - 1ul));
+	}
+
 	static auto constexpr initLevels()-> Level
 	{
 		Level res;
@@ -312,7 +322,8 @@ public:
 		res.storageOffset[0] = 0;
 		for (auto i=1; i<res.storageOffset.size(); ++i)
 		{
-			res.storageOffset[i] = res.storageOffset[i - 1] + res.maxStorageSize[i - 1];
+			auto prevStorage = addAlignment(res.maxStorageSize[i - 1]);
+			res.storageOffset[i] = res.storageOffset[i - 1] + prevStorage;
 		}
 		std::array<size_t, maxLevels> stateOffset = {};
 
@@ -366,42 +377,49 @@ private:
 };
 
 
-
 /**
- * The statechart module implement a hierarchical state machine. (Fsm)
- * Basic idea is to use classes as states. The constructor/destructor
- * implement entry/exit functions for the states.
- * It is hierarchical so that a state can be a sub state to a base state.
- * Note, this is _not_ inheritance. The base state have a much larger
- * lifetime than the sub state.
- *
- * The unit tests in fsm_test.cpp is fairly documented for an implementation
- * example.
- *
- * An Fsm is created by creating a class inheriting from FsmBase<...>
- * This requires the following support types:
- * - A description class tying all relevant types together. (Desc)
- * - An Event class which is posted to the FSM.
- * - An enum class enumerating all the states.
- * - A function setting up the state hierarchy.
- *
- * In addition we have one class for the action FSM and
- * one class for each implemented state.
- *
- * In the state setup function you need to call 'addState' for each
- * state that belongs to the state machine. Here you specify the State
- * class and the class of a possible parent state.
- *
- * Each state inherits from the class BaseState<Desc, StateId>.
- * All events are delivered through the function 'event' that needs to be
- * implemented.
- *
- * Each state has a particular level given by the number of transitive parents.
- * For each level there is at most 1 active state at any time.
- * The statechart allocates memory for each level and this is reused for each9999
- * state change by using placement new/delete. This should ensure deterministic
- * timing for all state changes.
+ * The user needs to supply storage for the statechart runtime data.
+ * Use FsmStorage to offer that storage. It will handle alignment for the user
  */
+template<typename FsmStatic_>
+struct FsmStorage
+{
+public:
+	using FS = FsmStatic_;
+	using Storage = typename std::aligned_storage<FS::levels.storageOffset[FS::maxLevels],
+			alignof(typename FS::AlignedStorageType)>::type;
+	Storage storage[1];
+	constexpr char* begin() { return static_cast<char*>(static_cast<void*>(&storage[0])); }
+	constexpr char* end()
+	{
+		return begin() + FS::levels.storageOffset[ FS::maxLevels ];
+	}
+	constexpr char* operator[](int i)
+	{
+		return begin() + FS::levels.storageOffset[i];
+	}
+	constexpr size_t size() const
+	{
+		return sizeof storage;
+	}
+};
 
+template<typename FsmNode, typename Event_>
+class Fsm;
+
+template<typename State, typename ...Nodes, typename Event_>
+class Fsm<FsmNode<State, Nodes...>, Event_>
+{
+public:
+	using Root = FsmNode<State, Nodes...>;
+	using FsmS = FsmStatic<Root, Event_>;
+	using Event = Event_;
+
+	void post(const Event& e)
+	{}
+
+private:
+	FsmStorage<FsmS> storage;
+};
 
 #endif /* SRC_STATECHART_STATECHART_H_ */
