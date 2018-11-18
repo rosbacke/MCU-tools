@@ -71,10 +71,12 @@ public:
 
 // Explicit type for indexing the Fsm array. Help the compiler keep track
 // of used indexes.
+struct StateIndex;
 struct StateIndex
 {
-	constexpr StateIndex() = default;
 	explicit constexpr StateIndex(std::size_t i) : index(i) {}
+	constexpr StateIndex() = default;
+
 
 	constexpr size_t get() const
 	{ return index; }
@@ -85,6 +87,8 @@ struct StateIndex
 
 	std::size_t index = 0;
 };
+
+static const constexpr StateIndex voidIndex{static_cast<std::size_t>(-1)};
 
 // A Node in the FSM tree.
 template<typename State, typename ...Nodes>
@@ -418,13 +422,28 @@ public:
 	using Root = FsmNode<State, Nodes...>;
 	using FsmS = FsmStatic<Root, Event_>;
 	using Event = Event_;
+	using StateId = typename State::StateId;
 
 	void post(const Event& e)
 	{}
 
+	StateId constexpr currentState() const
+	{
+		return FsmS::levels.index2Id[ activeState_.get() ];
+	}
+
+	template<StateId newState>
+	void transition()
+	{
+
+	}
+
+
 private:
 	FsmStorage<FsmS> storage;
-	StateIndex currentState;
+
+	// Use root state index to signal 'not a state'.
+	StateIndex activeState_ = voidIndex;;
 };
 
 #endif /* SRC_STATECHART_STATECHART_H_ */
